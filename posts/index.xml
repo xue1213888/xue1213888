@@ -1,12 +1,10 @@
 <rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
     <channel>
-        <title>🏠 Xsc Study Notes</title>
-        <link>http://xsc.scccc.cn/</link>
-        <description>为了更好的学习总结回顾，建立了这个blog，这里是我的学习笔记。</description>
+        <title>所有文章 - 🏠 Xsc Study Notes</title>
+        <link>http://xsc.scccc.cn/posts/</link>
+        <description>所有文章 | 🏠 Xsc Study Notes</description>
         <generator>Hugo -- gohugo.io</generator><language>zh-CN</language><managingEditor>xsc@scccc.cn (Xsc)</managingEditor>
-            <webMaster>xsc@scccc.cn (Xsc)</webMaster><lastBuildDate>Mon, 09 Aug 2021 16:48:21 &#43;0800</lastBuildDate>
-            <atom:link href="http://xsc.scccc.cn/index.xml" rel="self" type="application/rss+xml" />
-        <item>
+            <webMaster>xsc@scccc.cn (Xsc)</webMaster><lastBuildDate>Mon, 09 Aug 2021 16:48:21 &#43;0800</lastBuildDate><atom:link href="http://xsc.scccc.cn/posts/" rel="self" type="application/rss+xml" /><item>
     <title>测试博客的组建渲染</title>
     <link>http://xsc.scccc.cn/%E6%B5%8B%E8%AF%95%E5%8D%9A%E5%AE%A2%E7%9A%84%E7%BB%84%E5%BB%BA%E6%B8%B2%E6%9F%93/</link>
     <pubDate>Mon, 09 Aug 2021 16:48:21 &#43;0800</pubDate>

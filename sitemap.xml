@@ -2,6 +2,8 @@
     xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
     xmlns:xhtml="http://www.w3.org/1999/xhtml"
     ><url>
+            <loc>http://xsc.scccc.cn/posts/</loc><lastmod>2021-08-09T16:48:21&#43;08:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>http://xsc.scccc.cn/%E6%B5%8B%E8%AF%95%E5%8D%9A%E5%AE%A2%E7%9A%84%E7%BB%84%E5%BB%BA%E6%B8%B2%E6%9F%93/</loc><lastmod>2021-08-09T16:48:21&#43;08:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>http://xsc.scccc.cn/</loc><lastmod>2021-08-09T16:48:21&#43;08:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
             <loc>http://xsc.scccc.cn/categories/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url><url>
-            <loc>http://xsc.scccc.cn/tags/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url><url>
-            <loc>http://xsc.scccc.cn/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url></urlset>
+            <loc>http://xsc.scccc.cn/tags/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url></urlset>
