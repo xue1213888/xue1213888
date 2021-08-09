@@ -1,0 +1,10 @@
+<rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+    <channel>
+        <title>🏠 Xsc Study Notes</title>
+        <link>http://xsc.scccc.cn/</link>
+        <description>为了更好的学习总结回顾，建立了这个blog，这里是我的学习笔记。</description>
+        <generator>Hugo -- gohugo.io</generator><language>zh-CN</language><managingEditor>xsc@scccc.cn (Xsc)</managingEditor>
+            <webMaster>xsc@scccc.cn (Xsc)</webMaster>
+            <atom:link href="http://xsc.scccc.cn/index.xml" rel="self" type="application/rss+xml" />
+        </channel>
+</rss>
