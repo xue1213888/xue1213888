@@ -64,11 +64,5 @@ $$ c = \pm\sqrt{a^2 + b^2} $$
 
 [23]/[100]
 
-{{< figure src="/images/lighthouse.jpg" title="Lighthouse (figure)" >}}
-
-{{< gist spf13 7896402 >}}
-
-{{< param description >}}
-
 
 
