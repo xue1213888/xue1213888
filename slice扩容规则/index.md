@@ -127,7 +127,7 @@ slice扩容规则分一下几个步骤
 
 1. len > oldCap && oldCap < 1024 ， newCap = oldCap * 2 ，这是预估的cap
 2. len > oldCap && oldCap > 1024 ， newCap = oldCap * 1.25 ，这是预估的cap
-3. 我们的到预估的newCap后，需要根据单个数据元素内存大小oneMem来判断需要多少内存needMem
+3. 我们得到预估的newCap后，需要根据单个数据元素内存大小oneMem来判断需要多少内存needMem
 4. 因为内存管理模块里面管理的内存是有一定规格的，内存管理模块分配给我们我们最接近我们需要的最小内存relMem
 5. 然后用分配到的内存，除以我们的单个数据元素内存大小，得到最后的cap=relMem/oneMem
 

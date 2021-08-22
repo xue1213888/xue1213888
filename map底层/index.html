@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
+        <title>map底层结构和扩容规则 - 🏠 Xsc Study Notes</title><meta name="Description" content="为了更好的学习总结回顾，建立了这个blog，这里是我的学习笔记。"><meta property="og:title" content="map底层结构和扩容规则" />
+<meta property="og:description" content="map实现原理 这是map底层的数据结构 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 type hmap struct { count int // map中存入的键值对个数 flags uint8 // 标识当前" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://xsc.scccc.cn/map%E5%BA%95%E5%B1%82/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-08-22T11:52:05&#43;08:00" />
+<meta property="article:modified_time" content="2021-08-22T11:52:05&#43;08:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="map底层结构和扩容规则"/>
+<meta name="twitter:description" content="map实现原理 这是map底层的数据结构 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 type hmap struct { count int // map中存入的键值对个数 flags uint8 // 标识当前"/>
+<meta name="application-name" content="🏠 Xsc Study Notes">
+<meta name="apple-mobile-web-app-title" content="🏠 Xsc Study Notes"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="http://xsc.scccc.cn/map%E5%BA%95%E5%B1%82/" /><link rel="prev" href="http://xsc.scccc.cn/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99/" /><link rel="stylesheet" href="/lib/normalize/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="/lib/fontawesome-free/all.min.css"><link rel="stylesheet" href="/lib/animate/animate.min.css"><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "map底层结构和扩容规则",
+        "inLanguage": "zh-CN",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "http:\/\/xsc.scccc.cn\/map%E5%BA%95%E5%B1%82\/"
+        },"genre": "posts","keywords": "eggo, golang, 底层","wordcount":  1540 ,
+        "url": "http:\/\/xsc.scccc.cn\/map%E5%BA%95%E5%B1%82\/","datePublished": "2021-08-22T11:52:05+08:00","dateModified": "2021-08-22T11:52:05+08:00","publisher": {
+            "@type": "Organization",
+            "name": "Xsc"},"author": {
+                "@type": "Person",
+                "name": "Xsc"
+            },"description": ""
+    }
+    </script></head>
+    <body header-desktop="auto" header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="🏠 Xsc Study Notes"><span class="header-title-pre">🏠 </span>Xsc Study Notes</a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> 所有文章 </a><a class="menu-item" href="/categories/"> 分类 </a><a class="menu-item" href="/tags/"> 标签 </a><span class="menu-item delimiter"></span><span class="menu-item search" id="search-desktop">
+                        <input type="text" placeholder="搜索文章标题或内容..." id="search-input-desktop">
+                        <a href="javascript:void(0);" class="search-button search-toggle" id="search-toggle-desktop" title="搜索">
+                            <i class="fas fa-search fa-fw"></i>
+                        </a>
+                        <a href="javascript:void(0);" class="search-button search-clear" id="search-clear-desktop" title="清空">
+                            <i class="fas fa-times-circle fa-fw"></i>
+                        </a>
+                        <span class="search-button search-loading" id="search-loading-desktop">
+                            <i class="fas fa-spinner fa-fw fa-spin"></i>
+                        </span>
+                    </span><a href="javascript:void(0);" class="menu-item theme-switch" title="切换主题">
+                    <i class="fas fa-adjust fa-fw"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="🏠 Xsc Study Notes"><span class="header-title-pre">🏠 </span>Xsc Study Notes</a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><div class="search-wrapper">
+                    <div class="search mobile" id="search-mobile">
+                        <input type="text" placeholder="搜索文章标题或内容..." id="search-input-mobile">
+                        <a href="javascript:void(0);" class="search-button search-toggle" id="search-toggle-mobile" title="搜索">
+                            <i class="fas fa-search fa-fw"></i>
+                        </a>
+                        <a href="javascript:void(0);" class="search-button search-clear" id="search-clear-mobile" title="清空">
+                            <i class="fas fa-times-circle fa-fw"></i>
+                        </a>
+                        <span class="search-button search-loading" id="search-loading-mobile">
+                            <i class="fas fa-spinner fa-fw fa-spin"></i>
+                        </span>
+                    </div>
+                    <a href="javascript:void(0);" class="search-cancel" id="search-cancel-mobile">
+                        取消
+                    </a>
+                </div><a class="menu-item" href="/posts/" title="">所有文章</a><a class="menu-item" href="/categories/" title="">分类</a><a class="menu-item" href="/tags/" title="">标签</a><a href="javascript:void(0);" class="menu-item theme-switch" title="切换主题">
+                <i class="fas fa-adjust fa-fw"></i>
+            </a></div>
+    </div>
+</header>
+<div class="search-dropdown desktop">
+    <div id="search-dropdown-desktop"></div>
+</div>
+<div class="search-dropdown mobile">
+    <div id="search-dropdown-mobile"></div>
+</div>
+<main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">目录</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animated flipInX">map底层结构和扩容规则</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="https://xsc.scccc.cn" title="Author" target="_blank" rel="noopener noreffer author" class="author"><i class="fas fa-user-circle fa-fw"></i>Xsc</a></span>&nbsp;<span class="post-category">收录于 <a href="/categories/eggo/"><i class="far fa-folder fa-fw"></i>eggo</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-08-22">2021-08-22</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;约 1540 字&nbsp;
+                <i class="far fa-clock fa-fw"></i>&nbsp;预计阅读 4 分钟&nbsp;</div>
+        </div><div class="details toc" id="toc-static"  kept="true">
+                <div class="details-summary toc-title">
+                    <span>目录</span>
+                    <span><i class="details-icon fas fa-angle-right"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#翻倍扩容">翻倍扩容</a></li>
+    <li><a href="#等量扩容">等量扩容</a></li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><h1 id="map实现原理">map实现原理</h1>
+<p>这是map底层的数据结构</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-golang" data-lang="golang"><span class="kd">type</span> <span class="nx">hmap</span> <span class="kd">struct</span> <span class="p">{</span>
+    <span class="nx">count</span>     <span class="kt">int</span>    <span class="c1">// map中存入的键值对个数
+</span><span class="c1"></span>    <span class="nx">flags</span>     <span class="kt">uint8</span>  <span class="c1">// 标识当前map的状态，比如hashWriting=4第4位表示有goroutine正在往map写入
+</span><span class="c1"></span>    <span class="nx">B</span>         <span class="kt">uint8</span>  <span class="c1">// buckets的数量，2的B次方
+</span><span class="c1"></span>    <span class="nx">noverflow</span> <span class="kt">uint16</span> <span class="c1">// 溢出桶的使用数量
+</span><span class="c1"></span>    <span class="nx">hash0</span>     <span class="kt">uint32</span> <span class="c1">// hash算法的seed
+</span><span class="c1"></span>
+    <span class="nx">buckets</span>    <span class="nx">unsafe</span><span class="p">.</span><span class="nx">Pointer</span> <span class="c1">// buckets，指向存储健值对的桶的位置
+</span><span class="c1"></span>    <span class="nx">oldbuckets</span> <span class="nx">unsafe</span><span class="p">.</span><span class="nx">Pointer</span> <span class="c1">// 当需要扩容迁移时，这个oldBuckets指向旧桶的位置，buckets指向新桶的位置
+</span><span class="c1"></span>    <span class="nx">nevacuate</span>  <span class="kt">uintptr</span>        <span class="c1">// 当前的迁移进度
+</span><span class="c1"></span>
+    <span class="nx">extra</span> <span class="o">*</span><span class="nx">mapextra</span> <span class="c1">// 关于溢出桶的一些信息
+</span><span class="c1"></span><span class="p">}</span>
+
+<span class="kd">type</span> <span class="nx">mapextra</span> <span class="kd">struct</span> <span class="p">{</span>
+
+    <span class="nx">overflow</span>    <span class="o">*</span><span class="p">[]</span><span class="o">*</span><span class="nx">bmap</span>
+	<span class="nx">oldoverflow</span> <span class="o">*</span><span class="p">[]</span><span class="o">*</span><span class="nx">bmap</span>
+  
+    <span class="nx">nextOverflow</span> <span class="o">*</span><span class="nx">bmap</span> <span class="c1">// 指向下一个空闲的溢出桶位置
+</span><span class="c1"></span><span class="p">}</span>
+
+<span class="kd">type</span> <span class="nx">bmap</span> <span class="kd">struct</span> <span class="p">{</span>
+    <span class="nx">tophash</span> <span class="p">[</span><span class="nx">bucketCnt</span><span class="p">]</span><span class="kt">uint8</span> <span class="c1">// bucketCnt=8，这边记录每一个tophash
+</span><span class="c1"></span><span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h1 id="键值对存储与hash表">键值对存储与hash表。</h1>
+<p>hash表的存储会有一个buckets数组，用来记录桶的位置，我们对key进行hash算法得到一个khash。</p>
+<p>这个khash的低8位用来确定bucket桶的序号。</p>
+<p>一般有两种方法：</p>
+<ul>
+<li>直接与桶的数量取模。khash % m得到序号</li>
+<li>与桶数量-1进行与运算。khash &amp; （m-1）。</li>
+</ul>
+<p>golang采用的是第二种方法，这要要求，桶的数量必须是2的次幂。它的二进制标记位刚好只有一个1，m-1的话刚好就是除了最高位，全是1。</p>
+<p>我们现在得到bucket桶的位置了。</p>
+<h1 id="关于hash冲突">关于hash冲突</h1>
+<p>我们得到桶的位置后，不巧的是得到的桶已经存满了，放不下我们了，golang默认一个桶存8个键值对，bucketCtn=8。</p>
+<p>这时候出现了hash冲突。</p>
+<p>这时候我们还有两种办法应对：</p>
+<ul>
+<li><code>开放地址法</code>：假如我们现在要使用的是二号桶，结果二号桶存满了，那我们就去三号桶找空位。</li>
+<li><code>拉链法</code>：我们在二号桶后面拉一条指向溢出桶的线，在溢出桶内进行读写。</li>
+</ul>
+<p>golang采用的是<code>拉链法</code>。</p>
+<p>hash冲突会影响map的读写效率，一个散列均匀的hash算法是很重要的，适时扩容也是保障读写效率的有效手段。</p>
+<h1 id="map扩容规则">map扩容规则</h1>
+<p>golang在分配创建map时，会根据使用桶的数量创建相应数量的溢出桶，当B&gt;=5，golang会认为map使用溢出桶的概率会很高，就会分配2^(b-1)个溢出桶，溢出桶和bucket在内存中是连续的，作用不同而已。</p>
+<h2 id="翻倍扩容">翻倍扩容</h2>
+<p>golang map的负载因子是6.5。即count/(2^b)&gt;6.5就要进行扩容。扩容后的新桶是旧桶的两倍，这时候buckets指向新桶的位置，oldbuckets指向旧桶的位置，nevacuate表示当前需要迁移的旧桶序号。下一次读写操作时发生在该桶时，会首先进行迁移操作再进行读写。直到旧桶的所有数据都迁移到新桶中。</p>
+<h2 id="等量扩容">等量扩容</h2>
+<p>当不满足负载因子，但是的溢出桶使用过多时，会发生等量扩容。他的目的在于减少溢出桶的使用，提高读写效率。</p>
+<p>当B小于15，并且使用溢出桶的数量=当前桶的数量了，或者B大于15，溢出桶的数量大于2的15次方就需要等量扩容。</p>
+<h1 id="当我们插入一个元素时的内部流程">当我们插入一个元素时的内部流程</h1>
+<ul>
+<li>修改flags，说明现在在写</li>
+<li>我们首先对key进行hash算法得到一串hash值</li>
+<li>用hash值的低位来确定要存入的桶的位置也就是相应的bucket内存位置</li>
+<li>判断是否在扩容，如果在扩容，先迁移再处理</li>
+<li>遍历bucket的bmap，
+<ul>
+<li>找到空位置，就把tophash写到bmap.tophash数组的第i位，这个就是可以插入键值对的地址</li>
+<li>如果在遍历的过程中找到了相同的tophash，那么就判断key是否相等，相等的话，返回value的地址</li>
+<li>如果key不相等，那就继续遍历，并且bmap的tophash存满了，就从链在这个bmap后面的溢出桶查找和插入</li>
+<li>如果存满了，也没有链接在后面的溢出桶，就申请一个溢出桶链在后面。</li>
+</ul>
+</li>
+<li>如果当前不在扩容 &amp;&amp; 负载因子达到要求 或者溢出桶数量=新桶数量 或者溢出桶数量&gt;2的15次方。就进行扩容。</li>
+</ul>
+</div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>更新于 2021-08-22</span>
+            </div>
+            <div class="post-info-license"></div>
+        </div>
+        <div class="post-info-line">
+            <div class="post-info-md"><span>
+                            <a class="link-to-markdown" href="/map%E5%BA%95%E5%B1%82/index.md" target="_blank">阅读原始文档</a>
+                        </span></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="分享到 Twitter" data-sharer="twitter" data-url="http://xsc.scccc.cn/map%E5%BA%95%E5%B1%82/" data-title="map底层结构和扩容规则" data-hashtags="eggo,golang,底层"><i class="fab fa-twitter fa-fw"></i></a><a href="javascript:void(0);" title="分享到 Facebook" data-sharer="facebook" data-url="http://xsc.scccc.cn/map%E5%BA%95%E5%B1%82/" data-hashtag="eggo"><i class="fab fa-facebook-square fa-fw"></i></a><a href="javascript:void(0);" title="分享到 WhatsApp" data-sharer="whatsapp" data-url="http://xsc.scccc.cn/map%E5%BA%95%E5%B1%82/" data-title="map底层结构和扩容规则" data-web><i class="fab fa-whatsapp fa-fw"></i></a><a href="javascript:void(0);" title="分享到 Line" data-sharer="line" data-url="http://xsc.scccc.cn/map%E5%BA%95%E5%B1%82/" data-title="map底层结构和扩容规则"><i data-svg-src="/lib/simple-icons/icons/line.min.svg"></i></a><a href="javascript:void(0);" title="分享到 微博" data-sharer="weibo" data-url="http://xsc.scccc.cn/map%E5%BA%95%E5%B1%82/" data-title="map底层结构和扩容规则"><i class="fab fa-weibo fa-fw"></i></a><a href="javascript:void(0);" title="分享到 Myspace" data-sharer="myspace" data-url="http://xsc.scccc.cn/map%E5%BA%95%E5%B1%82/" data-title="map底层结构和扩容规则" data-description=""><i data-svg-src="/lib/simple-icons/icons/myspace.min.svg"></i></a><a href="javascript:void(0);" title="分享到 Blogger" data-sharer="blogger" data-url="http://xsc.scccc.cn/map%E5%BA%95%E5%B1%82/" data-title="map底层结构和扩容规则" data-description=""><i class="fab fa-blogger fa-fw"></i></a><a href="javascript:void(0);" title="分享到 Evernote" data-sharer="evernote" data-url="http://xsc.scccc.cn/map%E5%BA%95%E5%B1%82/" data-title="map底层结构和扩容规则"><i class="fab fa-evernote fa-fw"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/eggo/">eggo</a>,&nbsp;<a href="/tags/golang/">golang</a>,&nbsp;<a href="/tags/%E5%BA%95%E5%B1%82/">底层</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">返回</a></span>&nbsp;|&nbsp;<span><a href="/">主页</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"><a href="/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99/" class="prev" rel="prev" title="slice内存布局与扩容规则"><i class="fas fa-angle-left fa-fw"></i>slice内存布局与扩容规则</a></div>
+</div>
+<div id="comments"><div id="gitalk" class="comment"></div><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://github.com/gitalk/gitalk"></a>Gitalk</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line">由 <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.83.1">Hugo</a> 强力驱动 | 主题 - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="https://xsc.scccc.cn" target="_blank">Xsc</a></span>&nbsp;|&nbsp;<span class="license"><a rel="license external nofollow noopener noreffer" href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank">CC BY-NC 4.0</a></span><span class="icp-splitter">&nbsp;|&nbsp;</span><br class="icp-br"/>
+                    <span class="icp"><a href="https://beian.miit.gov.cn">晋ICP备20005176号-1</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="回到顶部">
+                <i class="fas fa-arrow-up fa-fw"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="查看评论">
+                <i class="fas fa-comment fa-fw"></i>
+            </a>
+        </div><link rel="stylesheet" href="/lib/gitalk/gitalk.min.css"><link rel="stylesheet" href="/lib/katex/katex.min.css"><link rel="stylesheet" href="/lib/katex/copy-tex.min.css"><script type="text/javascript" src="/lib/gitalk/gitalk.min.js"></script><script type="text/javascript" src="/lib/smooth-scroll/smooth-scroll.min.js"></script><script type="text/javascript" src="/lib/autocomplete/autocomplete.min.js"></script><script type="text/javascript" src="/lib/lunr/lunr.min.js"></script><script type="text/javascript" src="/lib/lunr/lunr.stemmer.support.min.js"></script><script type="text/javascript" src="/lib/lunr/lunr.zh.min.js"></script><script type="text/javascript" src="/lib/lazysizes/lazysizes.min.js"></script><script type="text/javascript" src="/lib/twemoji/twemoji.min.js"></script><script type="text/javascript" src="/lib/clipboard/clipboard.min.js"></script><script type="text/javascript" src="/lib/sharer/sharer.min.js"></script><script type="text/javascript" src="/lib/katex/katex.min.js"></script><script type="text/javascript" src="/lib/katex/auto-render.min.js"></script><script type="text/javascript" src="/lib/katex/copy-tex.min.js"></script><script type="text/javascript" src="/lib/katex/mhchem.min.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"复制到剪贴板","maxShownLines":10},"comment":{"gitalk":{"admin":["xue1213888"],"clientID":"44d4e1b80631a2d7d92a","clientSecret":"28a74d6def47bb65c0d99276f311f8f0f0c6bea0","id":"2021-08-22T11:52:05+08:00","owner":"xue1213888","repo":"xue1213888.github.io","title":"map底层结构和扩容规则"}},"math":{"delimiters":[{"display":true,"left":"$$","right":"$$"},{"display":true,"left":"\\[","right":"\\]"},{"display":false,"left":"$","right":"$"},{"display":false,"left":"\\(","right":"\\)"}],"strict":false},"search":{"highlightTag":"em","lunrIndexURL":"/index.json","lunrLanguageCode":"zh","lunrSegmentitURL":"/lib/lunr/lunr.segmentit.js","maxResultLength":null,"noResultsFound":"没有找到结果","snippetLength":null,"type":"lunr"},"twemoji":true};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>
