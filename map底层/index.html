@@ -27,7 +27,7 @@
         "mainEntityOfPage": {
             "@type": "WebPage",
             "@id": "http:\/\/xsc.scccc.cn\/map%E5%BA%95%E5%B1%82\/"
-        },"genre": "posts","keywords": "eggo, golang, 底层","wordcount":  1540 ,
+        },"genre": "posts","keywords": "eggo, golang, 底层","wordcount":  1545 ,
         "url": "http:\/\/xsc.scccc.cn\/map%E5%BA%95%E5%B1%82\/","datePublished": "2021-08-22T11:52:05+08:00","dateModified": "2021-08-22T11:52:05+08:00","publisher": {
             "@type": "Organization",
             "name": "Xsc"},"author": {
@@ -104,7 +104,7 @@
             <div class="toc-content" id="toc-content-auto"></div>
         </div><article class="page single"><h1 class="single-title animated flipInX">map底层结构和扩容规则</h1><div class="post-meta">
             <div class="post-meta-line"><span class="post-author"><a href="https://xsc.scccc.cn" title="Author" target="_blank" rel="noopener noreffer author" class="author"><i class="fas fa-user-circle fa-fw"></i>Xsc</a></span>&nbsp;<span class="post-category">收录于 <a href="/categories/eggo/"><i class="far fa-folder fa-fw"></i>eggo</a></span></div>
-            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-08-22">2021-08-22</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;约 1540 字&nbsp;
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-08-22">2021-08-22</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;约 1545 字&nbsp;
                 <i class="far fa-clock fa-fw"></i>&nbsp;预计阅读 4 分钟&nbsp;</div>
         </div><div class="details toc" id="toc-static"  kept="true">
                 <div class="details-summary toc-title">
@@ -180,13 +180,13 @@
 <p>这个khash的低8位用来确定bucket桶的序号。</p>
 <p>一般有两种方法：</p>
 <ul>
-<li>直接与桶的数量取模。khash % m得到序号</li>
-<li>与桶数量-1进行与运算。khash &amp; （m-1）。</li>
+<li>直接与桶的数量取模。<code>khash % m</code>得到序号</li>
+<li>与桶数量-1进行与运算。<code>khash &amp; （m-1）</code>。</li>
 </ul>
-<p>golang采用的是第二种方法，这要要求，桶的数量必须是2的次幂。它的二进制标记位刚好只有一个1，m-1的话刚好就是除了最高位，全是1。</p>
+<p>golang采用的是第二种方法，这要要求，桶的数量<code>必须是2的次幂</code>。它的二进制标记位刚好只有一个<code>1</code>，<code>m-1</code>的话刚好就是除了最高位，全是1。</p>
 <p>我们现在得到bucket桶的位置了。</p>
 <h1 id="关于hash冲突">关于hash冲突</h1>
-<p>我们得到桶的位置后，不巧的是得到的桶已经存满了，放不下我们了，golang默认一个桶存8个键值对，bucketCtn=8。</p>
+<p>我们得到桶的位置后，不巧的是得到的桶已经存满了，放不下我们了，golang默认一个桶存8个键值对，<code>bucketCtn=8</code>。</p>
 <p>这时候出现了hash冲突。</p>
 <p>这时候我们还有两种办法应对：</p>
 <ul>
@@ -196,12 +196,12 @@
 <p>golang采用的是<code>拉链法</code>。</p>
 <p>hash冲突会影响map的读写效率，一个散列均匀的hash算法是很重要的，适时扩容也是保障读写效率的有效手段。</p>
 <h1 id="map扩容规则">map扩容规则</h1>
-<p>golang在分配创建map时，会根据使用桶的数量创建相应数量的溢出桶，当B&gt;=5，golang会认为map使用溢出桶的概率会很高，就会分配2^(b-4)个溢出桶，溢出桶和bucket在内存中是连续的，作用不同而已。</p>
+<p>golang在分配创建map时，会根据使用桶的数量创建相应数量的溢出桶，当<code>B&gt;=5</code>，golang会认为map使用溢出桶的概率会很高，就会分配<code>2^(b-4)</code>个溢出桶，溢出桶和bucket在内存中是连续的，作用不同而已。</p>
 <h2 id="翻倍扩容">翻倍扩容</h2>
-<p>golang map的负载因子是6.5。即count/(2^b)&gt;6.5就要进行扩容。扩容后的新桶是旧桶的两倍，这时候buckets指向新桶的位置，oldbuckets指向旧桶的位置，nevacuate表示当前需要迁移的旧桶序号。下一次读写操作时发生在该桶时，会首先进行迁移操作再进行读写。直到旧桶的所有数据都迁移到新桶中。</p>
+<p>golang map的负载因子是<code>6.5</code>。即<code>count/(2^b)&gt;6.5</code>就要进行扩容。扩容后的新桶是旧桶的两倍，这时候<code>buckets</code>指向新桶的位置，<code>oldbuckets</code>指向旧桶的位置，<code>nevacuate</code>表示当前需要迁移的旧桶序号。下一次读写操作时发生在该桶时，会首先进行迁移操作再进行读写。直到旧桶的所有数据都迁移到新桶中。</p>
 <h2 id="等量扩容">等量扩容</h2>
 <p>当不满足负载因子，但是的溢出桶使用过多时，会发生等量扩容。他的目的在于减少溢出桶的使用，提高读写效率。</p>
-<p>当B小于15，并且使用溢出桶的数量=当前桶的数量了，或者B大于15，溢出桶的数量大于2的15次方就需要等量扩容。</p>
+<p>当<code>B&lt;=15</code>，并且使用<code>溢出桶的数量=当前桶的数量</code>了，或者<code>B&gt;15</code>，<code>溢出桶的数量&gt;2^15</code>就需要等量扩容。</p>
 <h1 id="当我们插入一个元素时的内部流程">当我们插入一个元素时的内部流程</h1>
 <ul>
 <li>修改flags，说明现在在写</li>
