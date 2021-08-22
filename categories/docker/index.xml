@@ -1,0 +1,15 @@
+<rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+    <channel>
+        <title>docker - 分类 - 🏠 Xsc Study Notes</title>
+        <link>http://xsc.scccc.cn/categories/docker/</link>
+        <description>docker - 分类 - 🏠 Xsc Study Notes</description>
+        <generator>Hugo -- gohugo.io</generator><language>zh-CN</language><managingEditor>xsc@scccc.cn (Xsc)</managingEditor>
+            <webMaster>xsc@scccc.cn (Xsc)</webMaster><lastBuildDate>Tue, 10 Aug 2021 14:52:05 &#43;0800</lastBuildDate><atom:link href="http://xsc.scccc.cn/categories/docker/" rel="self" type="application/rss+xml" /><item>
+    <title>docker学习笔记</title>
+    <link>http://xsc.scccc.cn/docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/</link>
+    <pubDate>Tue, 10 Aug 2021 14:52:05 &#43;0800</pubDate>
+    <author>作者</author>
+    <guid>http://xsc.scccc.cn/docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/</guid>
+    <description><![CDATA[Docker 官方文档 学习笔记 开始学习 介绍 在这个笔记中，记录了使用的docker的每一个步骤。 构建一个镜像并以容器的形式运行。 上传镜像到DockerHu]]></description>
+</item></channel>
+</rss>

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
+        <title>slice内存布局与扩容规则 - 🏠 Xsc Study Notes</title><meta name="Description" content="为了更好的学习总结回顾，建立了这个blog，这里是我的学习笔记。"><meta property="og:title" content="slice内存布局与扩容规则" />
+<meta property="og:description" content="首先我们来看一下Slice的结构 slice由三部分组成 array-指向底层数组的起始地址 len-记录slice元素现有长度 cap-记录sli" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://xsc.scccc.cn/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-08-22T11:52:05&#43;08:00" />
+<meta property="article:modified_time" content="2021-08-22T11:52:05&#43;08:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="slice内存布局与扩容规则"/>
+<meta name="twitter:description" content="首先我们来看一下Slice的结构 slice由三部分组成 array-指向底层数组的起始地址 len-记录slice元素现有长度 cap-记录sli"/>
+<meta name="application-name" content="🏠 Xsc Study Notes">
+<meta name="apple-mobile-web-app-title" content="🏠 Xsc Study Notes"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="http://xsc.scccc.cn/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99/" /><link rel="prev" href="http://xsc.scccc.cn/docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" /><link rel="stylesheet" href="/lib/normalize/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="/lib/fontawesome-free/all.min.css"><link rel="stylesheet" href="/lib/animate/animate.min.css"><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "slice内存布局与扩容规则",
+        "inLanguage": "zh-CN",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "http:\/\/xsc.scccc.cn\/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99\/"
+        },"genre": "posts","keywords": "eggo, golang, 底层","wordcount":  1364 ,
+        "url": "http:\/\/xsc.scccc.cn\/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99\/","datePublished": "2021-08-22T11:52:05+08:00","dateModified": "2021-08-22T11:52:05+08:00","publisher": {
+            "@type": "Organization",
+            "name": "Xsc"},"author": {
+                "@type": "Person",
+                "name": "Xsc"
+            },"description": ""
+    }
+    </script></head>
+    <body header-desktop="auto" header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="🏠 Xsc Study Notes"><span class="header-title-pre">🏠 </span>Xsc Study Notes</a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> 所有文章 </a><a class="menu-item" href="/categories/"> 分类 </a><a class="menu-item" href="/tags/"> 标签 </a><span class="menu-item delimiter"></span><span class="menu-item search" id="search-desktop">
+                        <input type="text" placeholder="搜索文章标题或内容..." id="search-input-desktop">
+                        <a href="javascript:void(0);" class="search-button search-toggle" id="search-toggle-desktop" title="搜索">
+                            <i class="fas fa-search fa-fw"></i>
+                        </a>
+                        <a href="javascript:void(0);" class="search-button search-clear" id="search-clear-desktop" title="清空">
+                            <i class="fas fa-times-circle fa-fw"></i>
+                        </a>
+                        <span class="search-button search-loading" id="search-loading-desktop">
+                            <i class="fas fa-spinner fa-fw fa-spin"></i>
+                        </span>
+                    </span><a href="javascript:void(0);" class="menu-item theme-switch" title="切换主题">
+                    <i class="fas fa-adjust fa-fw"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="🏠 Xsc Study Notes"><span class="header-title-pre">🏠 </span>Xsc Study Notes</a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><div class="search-wrapper">
+                    <div class="search mobile" id="search-mobile">
+                        <input type="text" placeholder="搜索文章标题或内容..." id="search-input-mobile">
+                        <a href="javascript:void(0);" class="search-button search-toggle" id="search-toggle-mobile" title="搜索">
+                            <i class="fas fa-search fa-fw"></i>
+                        </a>
+                        <a href="javascript:void(0);" class="search-button search-clear" id="search-clear-mobile" title="清空">
+                            <i class="fas fa-times-circle fa-fw"></i>
+                        </a>
+                        <span class="search-button search-loading" id="search-loading-mobile">
+                            <i class="fas fa-spinner fa-fw fa-spin"></i>
+                        </span>
+                    </div>
+                    <a href="javascript:void(0);" class="search-cancel" id="search-cancel-mobile">
+                        取消
+                    </a>
+                </div><a class="menu-item" href="/posts/" title="">所有文章</a><a class="menu-item" href="/categories/" title="">分类</a><a class="menu-item" href="/tags/" title="">标签</a><a href="javascript:void(0);" class="menu-item theme-switch" title="切换主题">
+                <i class="fas fa-adjust fa-fw"></i>
+            </a></div>
+    </div>
+</header>
+<div class="search-dropdown desktop">
+    <div id="search-dropdown-desktop"></div>
+</div>
+<div class="search-dropdown mobile">
+    <div id="search-dropdown-mobile"></div>
+</div>
+<main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">目录</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animated flipInX">slice内存布局与扩容规则</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="https://xsc.scccc.cn" title="Author" target="_blank" rel="noopener noreffer author" class="author"><i class="fas fa-user-circle fa-fw"></i>Xsc</a></span>&nbsp;<span class="post-category">收录于 <a href="/categories/eggo/"><i class="far fa-folder fa-fw"></i>eggo</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-08-22">2021-08-22</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;约 1364 字&nbsp;
+                <i class="far fa-clock fa-fw"></i>&nbsp;预计阅读 3 分钟&nbsp;</div>
+        </div><div class="details toc" id="toc-static"  kept="true">
+                <div class="details-summary toc-title">
+                    <span>目录</span>
+                    <span><i class="details-icon fas fa-angle-right"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents"></nav></div>
+            </div><div class="content" id="content"><h1 id="首先我们来看一下slice的结构">首先我们来看一下Slice的结构</h1>
+<p>slice由三部分组成</p>
+<ul>
+<li><code>array</code>-指向底层数组的起始地址</li>
+<li><code>len</code>-记录slice元素现有长度</li>
+<li><code>cap</code>-记录slice的内存长度</li>
+</ul>
+<p>我们通过make初始化的一个slice数组，它的返回的就是这样一个type。不是*type</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-golang" data-lang="golang"><span class="kd">type</span> <span class="nx">slice</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="nx">array</span> <span class="nx">unsafe</span><span class="p">.</span><span class="nx">Pointer</span>
+	<span class="nx">len</span>   <span class="kt">int</span>
+	<span class="nx">cap</span>   <span class="kt">int</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>这时候会分配底层数组的内存空间，并将array指向底层数组的起始位置。</p>
+<p>假如我们通过new来进行初始化，它返回的就是*type，这时候是没有分配底层数组的，它的array=nil。len和cap都为0。</p>
+<p>我们可以通过append为这个slice开辟底层数组的内存空间。</p>
+<h1 id="我们可以将多个slice指向同一个底层数组">我们可以将多个slice指向同一个底层数组</h1>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-golang" data-lang="golang"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">sliArray</span> <span class="o">:=</span> <span class="p">[</span><span class="mi">10</span><span class="p">]</span><span class="kt">int</span><span class="p">{</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">6</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">8</span><span class="p">,</span><span class="mi">9</span><span class="p">,</span><span class="mi">10</span><span class="p">}</span>
+	<span class="nx">sli1</span> <span class="o">:=</span> <span class="nx">sliArray</span><span class="p">[</span><span class="mi">2</span><span class="p">:</span><span class="mi">5</span><span class="p">]</span>
+	<span class="nx">sli2</span> <span class="o">:=</span> <span class="nx">sliArray</span><span class="p">[:]</span>
+	<span class="nx">sli3</span> <span class="o">:=</span> <span class="nx">sliArray</span><span class="p">[</span><span class="mi">5</span><span class="p">:]</span>
+
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%s=%d,len=%d,cap=%d\n&#34;</span><span class="p">,</span><span class="s">&#34;sli1&#34;</span><span class="p">,</span><span class="nx">sli1</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="nx">sli1</span><span class="p">),</span><span class="nb">cap</span><span class="p">(</span><span class="nx">sli1</span><span class="p">))</span>
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%s=%d,len=%d,cap=%d\n&#34;</span><span class="p">,</span><span class="s">&#34;sli2&#34;</span><span class="p">,</span><span class="nx">sli2</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="nx">sli2</span><span class="p">),</span><span class="nb">cap</span><span class="p">(</span><span class="nx">sli2</span><span class="p">))</span>
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%s=%d,len=%d,cap=%d\n&#34;</span><span class="p">,</span><span class="s">&#34;sli3&#34;</span><span class="p">,</span><span class="nx">sli3</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="nx">sli3</span><span class="p">),</span><span class="nb">cap</span><span class="p">(</span><span class="nx">sli3</span><span class="p">))</span>
+
+<span class="p">}</span>
+<span class="c1">// output
+</span><span class="c1">// sli1=[3 4 5],len=3,cap=8
+</span><span class="c1">// sli2=[1 2 3 4 5 6 7 8 9 10],len=10,cap=10
+</span><span class="c1">// sli3=[6 7 8 9 10],len=5,cap=5
+</span><span class="c1"></span>
+
+</code></pre></td></tr></table>
+</div>
+</div><p>上面sli1，sli2，sli3的array指向同一个数组的不同位置</p>
+<p>sli1从[2:5]代表从index=2的元素开始，到index=5的元素结束，不包含index=5，所以是3，4，5。len=3，cap代表的是底层数组的内存长度，所以cap是从index=2到该数组结束，所以cap=8</p>
+<p>sli2，sli3同理</p>
+<p>这时候对sli1进行append操作。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-golang" data-lang="golang">
+	<span class="nx">sli1</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">sli1</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%s=%d,len=%d,cap=%d\n&#34;</span><span class="p">,</span><span class="s">&#34;sli1&#34;</span><span class="p">,</span><span class="nx">sli1</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="nx">sli1</span><span class="p">),</span><span class="nb">cap</span><span class="p">(</span><span class="nx">sli1</span><span class="p">))</span>
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%s=%d,len=%d,cap=%d\n&#34;</span><span class="p">,</span><span class="s">&#34;sli2&#34;</span><span class="p">,</span><span class="nx">sli2</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="nx">sli2</span><span class="p">),</span><span class="nb">cap</span><span class="p">(</span><span class="nx">sli2</span><span class="p">))</span>
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%s=%d,len=%d,cap=%d\n&#34;</span><span class="p">,</span><span class="s">&#34;sli3&#34;</span><span class="p">,</span><span class="nx">sli3</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="nx">sli3</span><span class="p">),</span><span class="nb">cap</span><span class="p">(</span><span class="nx">sli3</span><span class="p">))</span>
+
+
+<span class="c1">// output
+</span><span class="c1">// sli1=[3 4 5 1],len=4,cap=8
+</span><span class="c1">// sli2=[1 2 3 4 5 1 7 8 9 10],len=10,cap=10
+</span><span class="c1">// sli3=[1 7 8 9 10],len=5,cap=5
+</span><span class="c1"></span>
+
+</code></pre></td></tr></table>
+</div>
+</div><p>append会对底层数组进行修改，因为添加元素后它还在cap的范围内。</p>
+<p>这时候sli2，sli3相应位置的元素也发生了变化。</p>
+<p>如果我们append添加元素后，超过了cap范围，他就会重新分配底层数组内存空间，并将原数据拷贝到新的位置。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-golang" data-lang="golang">	<span class="nx">sli1</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">sli1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">5</span><span class="p">)</span>
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%s=%d,len=%d,cap=%d\n&#34;</span><span class="p">,</span><span class="s">&#34;sli1&#34;</span><span class="p">,</span><span class="nx">sli1</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="nx">sli1</span><span class="p">),</span><span class="nb">cap</span><span class="p">(</span><span class="nx">sli1</span><span class="p">))</span>
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%s=%d,len=%d,cap=%d\n&#34;</span><span class="p">,</span><span class="s">&#34;sli2&#34;</span><span class="p">,</span><span class="nx">sli2</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="nx">sli2</span><span class="p">),</span><span class="nb">cap</span><span class="p">(</span><span class="nx">sli2</span><span class="p">))</span>
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">&#34;%s=%d,len=%d,cap=%d\n&#34;</span><span class="p">,</span><span class="s">&#34;sli3&#34;</span><span class="p">,</span><span class="nx">sli3</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="nx">sli3</span><span class="p">),</span><span class="nb">cap</span><span class="p">(</span><span class="nx">sli3</span><span class="p">))</span>
+
+<span class="c1">// output
+</span><span class="c1">// sli1=[3 4 5 1 1 2 3 4 5],len=9,cap=16
+</span><span class="c1">// sli2=[1 2 3 4 5 1 7 8 9 10],len=10,cap=10
+</span><span class="c1">// sli3=[1 7 8 9 10],len=5,cap=5
+</span><span class="c1"></span>
+</code></pre></td></tr></table>
+</div>
+</div><p>这时候不会影响sli2，和sli3的内容。</p>
+<p>我们可以通过reflect包里面的SliceHeader来获取array指向的底层数组的地址，来验证我们上面的结论。发现确实在append超出cap范围后，指向底层数组的地址发生了变化。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-golang" data-lang="golang"><span class="kd">func</span> <span class="nf">pointer</span><span class="p">(</span><span class="nx">sli</span> <span class="p">[]</span><span class="kt">int</span><span class="p">)</span><span class="kt">int</span><span class="p">{</span>
+	<span class="nx">hdr</span> <span class="o">:=</span> <span class="p">(</span><span class="o">*</span><span class="nx">reflect</span><span class="p">.</span><span class="nx">SliceHeader</span><span class="p">)(</span><span class="nx">unsafe</span><span class="p">.</span><span class="nf">Pointer</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">sli</span><span class="p">))</span>
+	<span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="nx">hdr</span><span class="p">.</span><span class="nx">Data</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="nx">sliArray</span> <span class="o">:=</span> <span class="p">[</span><span class="mi">10</span><span class="p">]</span><span class="kt">int</span><span class="p">{</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">6</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">8</span><span class="p">,</span><span class="mi">9</span><span class="p">,</span><span class="mi">10</span><span class="p">}</span>
+	<span class="nx">sli1</span> <span class="o">:=</span> <span class="nx">sliArray</span><span class="p">[</span><span class="mi">2</span><span class="p">:</span><span class="mi">5</span><span class="p">]</span>
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;start:&#34;</span><span class="p">,</span><span class="nf">pointer</span><span class="p">(</span><span class="nx">sli1</span><span class="p">))</span>
+	<span class="nx">sli1</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">sli1</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;append-1:&#34;</span><span class="p">,</span><span class="nf">pointer</span><span class="p">(</span><span class="nx">sli1</span><span class="p">))</span>
+	<span class="nx">sli1</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">sli1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">6</span><span class="p">,</span><span class="mi">5</span><span class="p">)</span>
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;append-2:&#34;</span><span class="p">,</span><span class="nf">pointer</span><span class="p">(</span><span class="nx">sli1</span><span class="p">))</span>
+<span class="p">}</span>
+
+<span class="c1">// output
+</span><span class="c1">// start: 824634322576
+</span><span class="c1">// append-1: 824634322576
+</span><span class="c1">// append-2: 824634482688
+</span><span class="c1"></span>
+</code></pre></td></tr></table>
+</div>
+</div><h1 id="这下到了我们的slice扩容规则">这下到了我们的slice扩容规则</h1>
+<p>slice扩容规则分一下几个步骤</p>
+<ul>
+<li>当append后长度小于oldCap，那么不进行扩容</li>
+<li>当append后的长度大于oldCap*2，那么久扩容到那么多就好</li>
+<li>当append后长度大于oldCap，并且小于2倍，那么新的newCap需要进行一下几个判断</li>
+</ul>
+<ol>
+<li>len &gt; oldCap &amp;&amp; oldCap &lt; 1024 ， newCap = oldCap * 2 ，这是预估的cap</li>
+<li>len &gt; oldCap &amp;&amp; oldCap &gt; 1024 ， newCap = oldCap * 1.25 ，这是预估的cap</li>
+<li>我们的到预估的newCap后，需要根据单个数据元素内存大小oneMem来判断需要多少内存needMem</li>
+<li>因为内存管理模块里面管理的内存是有一定规格的，内存管理模块分配给我们我们最接近我们需要的最小内存relMem</li>
+<li>然后用分配到的内存，除以我们的单个数据元素内存大小，得到最后的cap=relMem/oneMem</li>
+</ol>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-golang" data-lang="golang"><span class="kd">func</span> <span class="nf">main</span><span class="p">(){</span>
+	<span class="nx">s1</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span>
+	<span class="nx">s1</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">s1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">cap</span><span class="p">(</span><span class="nx">s1</span><span class="p">))</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>看上面例子</p>
+<ol>
+<li>一开始len=2，cap=2</li>
+<li>append后，len=5，newCap=5</li>
+<li>64位操作系用1个int占8个字节，所以需要分配5*8=40字节的内存</li>
+<li>系统规格最接近的为48字节的内存，48/8=6。所以实际扩容后的cap=6</li>
+</ol>
+<h1 id="over">Over</h1>
+</div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>更新于 2021-08-22</span>
+            </div>
+            <div class="post-info-license"></div>
+        </div>
+        <div class="post-info-line">
+            <div class="post-info-md"><span>
+                            <a class="link-to-markdown" href="/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99/index.md" target="_blank">阅读原始文档</a>
+                        </span></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="分享到 Twitter" data-sharer="twitter" data-url="http://xsc.scccc.cn/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99/" data-title="slice内存布局与扩容规则" data-hashtags="eggo,golang,底层"><i class="fab fa-twitter fa-fw"></i></a><a href="javascript:void(0);" title="分享到 Facebook" data-sharer="facebook" data-url="http://xsc.scccc.cn/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99/" data-hashtag="eggo"><i class="fab fa-facebook-square fa-fw"></i></a><a href="javascript:void(0);" title="分享到 WhatsApp" data-sharer="whatsapp" data-url="http://xsc.scccc.cn/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99/" data-title="slice内存布局与扩容规则" data-web><i class="fab fa-whatsapp fa-fw"></i></a><a href="javascript:void(0);" title="分享到 Line" data-sharer="line" data-url="http://xsc.scccc.cn/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99/" data-title="slice内存布局与扩容规则"><i data-svg-src="/lib/simple-icons/icons/line.min.svg"></i></a><a href="javascript:void(0);" title="分享到 微博" data-sharer="weibo" data-url="http://xsc.scccc.cn/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99/" data-title="slice内存布局与扩容规则"><i class="fab fa-weibo fa-fw"></i></a><a href="javascript:void(0);" title="分享到 Myspace" data-sharer="myspace" data-url="http://xsc.scccc.cn/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99/" data-title="slice内存布局与扩容规则" data-description=""><i data-svg-src="/lib/simple-icons/icons/myspace.min.svg"></i></a><a href="javascript:void(0);" title="分享到 Blogger" data-sharer="blogger" data-url="http://xsc.scccc.cn/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99/" data-title="slice内存布局与扩容规则" data-description=""><i class="fab fa-blogger fa-fw"></i></a><a href="javascript:void(0);" title="分享到 Evernote" data-sharer="evernote" data-url="http://xsc.scccc.cn/slice%E6%89%A9%E5%AE%B9%E8%A7%84%E5%88%99/" data-title="slice内存布局与扩容规则"><i class="fab fa-evernote fa-fw"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/eggo/">eggo</a>,&nbsp;<a href="/tags/golang/">golang</a>,&nbsp;<a href="/tags/%E5%BA%95%E5%B1%82/">底层</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">返回</a></span>&nbsp;|&nbsp;<span><a href="/">主页</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"><a href="/docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" class="prev" rel="prev" title="docker学习笔记"><i class="fas fa-angle-left fa-fw"></i>docker学习笔记</a></div>
+</div>
+<div id="comments"><div id="gitalk" class="comment"></div><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://github.com/gitalk/gitalk"></a>Gitalk</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line">由 <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.83.1">Hugo</a> 强力驱动 | 主题 - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="https://xsc.scccc.cn" target="_blank">Xsc</a></span>&nbsp;|&nbsp;<span class="license"><a rel="license external nofollow noopener noreffer" href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank">CC BY-NC 4.0</a></span><span class="icp-splitter">&nbsp;|&nbsp;</span><br class="icp-br"/>
+                    <span class="icp"><a href="https://beian.miit.gov.cn">晋ICP备20005176号-1</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="回到顶部">
+                <i class="fas fa-arrow-up fa-fw"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="查看评论">
+                <i class="fas fa-comment fa-fw"></i>
+            </a>
+        </div><link rel="stylesheet" href="/lib/gitalk/gitalk.min.css"><link rel="stylesheet" href="/lib/katex/katex.min.css"><link rel="stylesheet" href="/lib/katex/copy-tex.min.css"><script type="text/javascript" src="/lib/gitalk/gitalk.min.js"></script><script type="text/javascript" src="/lib/smooth-scroll/smooth-scroll.min.js"></script><script type="text/javascript" src="/lib/autocomplete/autocomplete.min.js"></script><script type="text/javascript" src="/lib/lunr/lunr.min.js"></script><script type="text/javascript" src="/lib/lunr/lunr.stemmer.support.min.js"></script><script type="text/javascript" src="/lib/lunr/lunr.zh.min.js"></script><script type="text/javascript" src="/lib/lazysizes/lazysizes.min.js"></script><script type="text/javascript" src="/lib/twemoji/twemoji.min.js"></script><script type="text/javascript" src="/lib/clipboard/clipboard.min.js"></script><script type="text/javascript" src="/lib/sharer/sharer.min.js"></script><script type="text/javascript" src="/lib/katex/katex.min.js"></script><script type="text/javascript" src="/lib/katex/auto-render.min.js"></script><script type="text/javascript" src="/lib/katex/copy-tex.min.js"></script><script type="text/javascript" src="/lib/katex/mhchem.min.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"复制到剪贴板","maxShownLines":10},"comment":{"gitalk":{"admin":["xue1213888"],"clientID":"44d4e1b80631a2d7d92a","clientSecret":"28a74d6def47bb65c0d99276f311f8f0f0c6bea0","id":"2021-08-22T11:52:05+08:00","owner":"xue1213888","repo":"xue1213888.github.io","title":"slice内存布局与扩容规则"}},"math":{"delimiters":[{"display":true,"left":"$$","right":"$$"},{"display":true,"left":"\\[","right":"\\]"},{"display":false,"left":"$","right":"$"},{"display":false,"left":"\\(","right":"\\)"}],"strict":false},"search":{"highlightTag":"em","lunrIndexURL":"/index.json","lunrLanguageCode":"zh","lunrSegmentitURL":"/lib/lunr/lunr.segmentit.js","maxResultLength":null,"noResultsFound":"没有找到结果","snippetLength":null,"type":"lunr"},"twemoji":true};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>

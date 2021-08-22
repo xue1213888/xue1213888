@@ -5,6 +5,20 @@
         <description>golang - 分类 - 🏠 Xsc Study Notes</description>
         <generator>Hugo -- gohugo.io</generator><language>zh-CN</language><managingEditor>xsc@scccc.cn (Xsc)</managingEditor>
             <webMaster>xsc@scccc.cn (Xsc)</webMaster><lastBuildDate>Tue, 10 Aug 2021 14:52:05 &#43;0800</lastBuildDate><atom:link href="http://xsc.scccc.cn/categories/golang/" rel="self" type="application/rss+xml" /><item>
+    <title>docker学习笔记</title>
+    <link>http://xsc.scccc.cn/docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/</link>
+    <pubDate>Tue, 10 Aug 2021 14:52:05 &#43;0800</pubDate>
+    <author>作者</author>
+    <guid>http://xsc.scccc.cn/docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/</guid>
+    <description><![CDATA[Docker 官方文档 学习笔记 开始学习 介绍 在这个笔记中，记录了使用的docker的每一个步骤。 构建一个镜像并以容器的形式运行。 上传镜像到DockerHu]]></description>
+</item><item>
+    <title>go-grpc文档使用笔记</title>
+    <link>http://xsc.scccc.cn/go-grpc%E6%96%87%E6%A1%A3%E4%BD%BF%E7%94%A8%E7%AC%94%E8%AE%B0/</link>
+    <pubDate>Tue, 10 Aug 2021 14:52:05 &#43;0800</pubDate>
+    <author>作者</author>
+    <guid>http://xsc.scccc.cn/go-grpc%E6%96%87%E6%A1%A3%E4%BD%BF%E7%94%A8%E7%AC%94%E8%AE%B0/</guid>
+    <description><![CDATA[grpc.Code 判断err是否是rpc系统生成的err grpc.ErrorDesc 获取err的string描述 grpc.Errorf 生成一个rpc系统的error，带有rpc的code grpc.Invoke 发送一个rpc]]></description>
+</item><item>
     <title>从什么都不懂开始构建微服务（一）：RPC是什么</title>
     <link>http://xsc.scccc.cn/%E4%BB%8E%E4%BB%80%E4%B9%88%E9%83%BD%E4%B8%8D%E6%87%82%E5%BC%80%E5%A7%8B%E6%9E%84%E5%BB%BA%E5%BE%AE%E6%9C%8D%E5%8A%A1%E4%B8%80rpc%E6%98%AF%E4%BB%80%E4%B9%88/</link>
     <pubDate>Tue, 10 Aug 2021 14:52:05 &#43;0800</pubDate>
