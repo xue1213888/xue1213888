@@ -11,12 +11,5 @@
     <author>作者</author>
     <guid>http://xsc.scccc.cn/docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/</guid>
     <description><![CDATA[Docker 官方文档 学习笔记 开始学习 介绍 在这个笔记中，记录了使用的docker的每一个步骤。 构建一个镜像并以容器的形式运行。 上传镜像到DockerHu]]></description>
-</item><item>
-    <title>os - 虚拟内存</title>
-    <link>http://xsc.scccc.cn/os%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98/</link>
-    <pubDate>Tue, 10 Aug 2021 14:52:05 &#43;0800</pubDate>
-    <author>作者</author>
-    <guid>http://xsc.scccc.cn/os%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98/</guid>
-    <description><![CDATA[1]]></description>
 </item></channel>
 </rss>

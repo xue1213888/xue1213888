@@ -4,7 +4,14 @@
         <link>http://xsc.scccc.cn/tags/%E5%BA%95%E5%B1%82/</link>
         <description>底层 - 标签 - 🏠 Xsc Study Notes</description>
         <generator>Hugo -- gohugo.io</generator><language>zh-CN</language><managingEditor>xsc@scccc.cn (Xsc)</managingEditor>
-            <webMaster>xsc@scccc.cn (Xsc)</webMaster><lastBuildDate>Sun, 22 Aug 2021 11:52:05 &#43;0800</lastBuildDate><atom:link href="http://xsc.scccc.cn/tags/%E5%BA%95%E5%B1%82/" rel="self" type="application/rss+xml" /><item>
+            <webMaster>xsc@scccc.cn (Xsc)</webMaster><lastBuildDate>Sun, 22 Aug 2021 22:52:05 &#43;0800</lastBuildDate><atom:link href="http://xsc.scccc.cn/tags/%E5%BA%95%E5%B1%82/" rel="self" type="application/rss+xml" /><item>
+    <title>go语言内存管理 - 系统内存管理</title>
+    <link>http://xsc.scccc.cn/go-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/</link>
+    <pubDate>Sun, 22 Aug 2021 22:52:05 &#43;0800</pubDate>
+    <author>作者</author>
+    <guid>http://xsc.scccc.cn/go-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/</guid>
+    <description><![CDATA[最原始的内存操作 我们可以吧内存看作是一个连续的数组，内存地址理解为数组的下标，我们一开始CPU是直接通过内存地址来访问物理内存的。 慢慢多任务]]></description>
+</item><item>
     <title>map底层结构和扩容规则</title>
     <link>http://xsc.scccc.cn/map%E5%BA%95%E5%B1%82/</link>
     <pubDate>Sun, 22 Aug 2021 11:52:05 &#43;0800</pubDate>
