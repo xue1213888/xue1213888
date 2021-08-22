@@ -91,6 +91,8 @@ theme = "LoveIt"
     RSS = true
 
   [params.page]
+    enableEmoji = true
+    twemoji = true
     # 是否使用 lightgallery
     lightgallery = false
     # LoveIt 新增 | 0.2.0 是否使用 ruby 扩展语法
@@ -178,7 +180,7 @@ theme = "LoveIt"
         # LoveIt 新增 | 0.1.1
         enable = true
         owner = "xue1213888"
-        repo = "learngit"
+        repo = "xue1213888.github.io"
         clientId = "44d4e1b80631a2d7d92a"
         clientSecret = "28a74d6def47bb65c0d99276f311f8f0f0c6bea0"
 [markup]
@@ -285,11 +287,3 @@ theme = "LoveIt"
     url = "/categories/"
     title = ""
     weight = 2
-  [[menu.main]]
-    identifier = "about"
-    pre = ""
-    post = ""
-    name = "关于"
-    url = "/categories/"
-    title = ""
-    weight = 4
