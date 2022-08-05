@@ -39,7 +39,7 @@ theme = "LoveIt"
   description = "为了更好的学习总结回顾，建立了这个blog，这里是我的学习笔记。"
   # website images for Open Graph and Twitter Cards
   # 网站图片, 用于 Open Graph 和 Twitter Cards
-  images = ['https://lmg.jj20.com/up/allimg/1115/030R2100R6/22030Q00R6-1-1200.jpg']
+  images = []
 
   # Header config
   # 页面头部导航栏配置
@@ -531,12 +531,12 @@ theme = "LoveIt"
     [params.page.seo]
       # image URL
       # 图片 URL
-      images = ['https://lmg.jj20.com/up/allimg/tp08/1704102358850-lp.jpg']
+      images = []
       # Publisher info
       # 出版者信息
       [params.page.seo.publisher]
-        name = "xscxsc1213888"
-        logoUrl = "https://i0.hdslb.com/bfs/archive/5b8cfd2c03e653106b1c9c37ba2025e39afc0ad1.png"
+        name = ""
+        logoUrl = ""
 
   # TypeIt config
   # TypeIt 配置
@@ -568,7 +568,7 @@ theme = "LoveIt"
   [params.seo]
     # image URL
     # 图片 URL
-    image = "https://lmg.jj20.com/up/allimg/1115/031422132051/220314132051-1-1200.jpg"
+    image = ""
     # thumbnail URL
     # 缩略图 URL
     thumbnailUrl = ""
