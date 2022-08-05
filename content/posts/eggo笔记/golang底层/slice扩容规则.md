@@ -6,7 +6,7 @@ categories: ["eggo"]
 draft: false
 ---
 
-# 首先我们来看一下Slice的结构11
+# 首先我们来看一下Slice的结构
 
 slice由三部分组成
 
