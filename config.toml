@@ -489,7 +489,7 @@ theme = "LoveIt"
         enable = true
         # owner/repo
         repo = "xue1213888/xue1213888"
-        issueTerm = "actposts"
+        issueTerm = "pathname"
         label = "actposts"
         lightTheme = "github-light"
         darkTheme = "github-dark"
