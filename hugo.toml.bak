@@ -14,7 +14,7 @@ theme = "LoveIt"
 [module]
   [module.hugoVersion]
     extended = true
-    max = "0.79.0"
+    max = "0.99.0"
     min = "0.62.0"
 
 [params]

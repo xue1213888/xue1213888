@@ -15,14 +15,6 @@
     <description><![CDATA[对一次性事件进行睡眠和唤醒。在调用 notesleep 或者 notewakeup 之前，必须调用 noteclear 来初始化 note 。然后，一个线程可以调用 notesleep ，一个线程可以调用 notewakeup 一次，一点调用了 notewakeup ， notesleep 就会]]></description>
 </item>
 <item>
-    <title>5. runtime之note一次性通知事件</title>
-    <link>http://localhost:1313/6.-%E6%B5%8B%E8%AF%95%E6%96%87%E7%AB%A0/</link>
-    <pubDate>Wed, 07 Sep 2022 10:56:00 &#43;0800</pubDate>
-    <author>Xsc</author>
-    <guid>http://localhost:1313/6.-%E6%B5%8B%E8%AF%95%E6%96%87%E7%AB%A0/</guid>
-    <description><![CDATA[对一次性事件进行睡眠和唤醒。在调用 notesleep 或者 notewakeup 之前，必须调用 noteclear 来初始化 note 。然后，一个线程可以调用 notesleep ，一个线程可以调用 notewakeup 一次，一点调用了 notewakeup ， notesleep 就会]]></description>
-</item>
-<item>
     <title>4. runtime之mutex线程锁的实现</title>
     <link>http://localhost:1313/4.-runtime%E4%B9%8Bmutex%E7%BA%BF%E7%A8%8B%E9%94%81%E7%9A%84%E5%AE%9E%E7%8E%B0/</link>
     <pubDate>Sun, 04 Sep 2022 01:39:00 &#43;0800</pubDate>
