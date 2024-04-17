@@ -14,7 +14,6 @@ theme = "LoveIt"
 [module]
   [module.hugoVersion]
     extended = true
-    max = "0.99.0"
     min = "0.62.0"
 
 [params]
@@ -706,6 +705,7 @@ theme = "LoveIt"
   page = ["HTML", "MarkDown"]
   section = ["HTML", "RSS"]
   taxonomy = ["HTML", "RSS"]
+  taxonomyTerm = ["HTML"]
 
 
 [menu]
