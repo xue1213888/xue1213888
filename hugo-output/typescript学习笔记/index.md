@@ -1,10 +1,5 @@
----
-title: "typescript学习笔记，一篇包含所有知识点的笔记"
-date: 2024-04-18T03:00:00+08:00
-tags: ["typescript"]
-categories: ["typescript"]
-draft: false
----
+# typescript学习笔记，一篇包含所有知识点的笔记
+
 
 > 本篇笔记是阅读阮一峰老师的《TypeScript 教程》总结出来的笔记
 > 
@@ -207,3 +202,4 @@ x.foo = 100;
 尽量避免使用 `any` 类型。
 
 ### 1.2 类型推断
+
