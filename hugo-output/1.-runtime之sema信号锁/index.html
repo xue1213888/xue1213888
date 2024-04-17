@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <title>1. runtime之sema信号锁 - 🏠 Xsc Study Notes</title><meta name="Description" content="为了更好的学习总结回顾，建立了这个blog，这里是我的学习笔记。"><meta property="og:title" content="1. runtime之sema信号锁" />
+<meta property="og:description" content="假如我们有一个宰🐷厂sema，里面有很多的危险工具，比如刀。 我们有好几个仓库（不同的addr），里面放着各种各样的刀，每个仓库它们都记录着有" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://xsc.scccc.cn/1.-runtime%E4%B9%8Bsema%E4%BF%A1%E5%8F%B7%E9%94%81/" />
+<meta property="article:published_time" content="2022-09-03T17:17:00+08:00" />
+<meta property="article:modified_time" content="2022-09-03T17:17:00+08:00" /><meta property="og:site_name" content="🏠 Xsc Study Notes" />
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="1. runtime之sema信号锁"/>
+<meta name="twitter:description" content="假如我们有一个宰🐷厂sema，里面有很多的危险工具，比如刀。 我们有好几个仓库（不同的addr），里面放着各种各样的刀，每个仓库它们都记录着有"/>
+<meta name="application-name" content="🏠 Xsc Study Notes">
+<meta name="apple-mobile-web-app-title" content="🏠 Xsc Study Notes"><meta name="theme-color" content="#ffffff"><meta name="msapplication-TileColor" content="#da532c"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://xsc.scccc.cn/1.-runtime%E4%B9%8Bsema%E4%BF%A1%E5%8F%B7%E9%94%81/" /><link rel="next" href="https://xsc.scccc.cn/2.-runtime%E4%B9%8Bnotifylist%E6%9D%A1%E4%BB%B6%E5%94%A4%E9%86%92/" /><link rel="stylesheet" href="/css/style.min.css"><link rel="preload" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.1.1/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+        <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.1.1/css/all.min.css"></noscript><link rel="preload" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+        <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css"></noscript><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "1. runtime之sema信号锁",
+        "inLanguage": "zh-CN",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https:\/\/xsc.scccc.cn\/1.-runtime%E4%B9%8Bsema%E4%BF%A1%E5%8F%B7%E9%94%81\/"
+        },"genre": "posts","keywords": "runtime, go底层实现","wordcount":  2534 ,
+        "url": "https:\/\/xsc.scccc.cn\/1.-runtime%E4%B9%8Bsema%E4%BF%A1%E5%8F%B7%E9%94%81\/","datePublished": "2022-09-03T17:17:00+08:00","dateModified": "2022-09-03T17:17:00+08:00","publisher": {
+            "@type": "Organization",
+            "name": ""},"author": {
+                "@type": "Person",
+                "name": "Xsc"
+            },"description": ""
+    }
+    </script></head>
+    <body data-header-desktop="auto" data-header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="🏠 Xsc Study Notes"><span class="header-title-pre">🏠 </span><span id="id-1" class="typeit"></span></a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> 所有文章 </a><a class="menu-item" href="/categories/"> 分类 </a><a class="menu-item" href="/tags/"> 标签 </a><span class="menu-item delimiter"></span><span class="menu-item search" id="search-desktop">
+                        <input type="text" placeholder="想找什么就来找吧" id="search-input-desktop">
+                        <a href="javascript:void(0);" class="search-button search-toggle" id="search-toggle-desktop" title="搜索">
+                            <i class="fas fa-search fa-fw" aria-hidden="true"></i>
+                        </a>
+                        <a href="javascript:void(0);" class="search-button search-clear" id="search-clear-desktop" title="清空">
+                            <i class="fas fa-times-circle fa-fw" aria-hidden="true"></i>
+                        </a>
+                        <span class="search-button search-loading" id="search-loading-desktop">
+                            <i class="fas fa-spinner fa-fw fa-spin" aria-hidden="true"></i>
+                        </span>
+                    </span><a href="javascript:void(0);" class="menu-item theme-switch" title="切换主题">
+                    <i class="fas fa-adjust fa-fw" aria-hidden="true"></i>
+                </a></div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="🏠 Xsc Study Notes"><span class="header-title-pre">🏠 </span><span id="id-2" class="typeit"></span></a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><div class="search-wrapper">
+                    <div class="search mobile" id="search-mobile">
+                        <input type="text" placeholder="想找什么就来找吧" id="search-input-mobile">
+                        <a href="javascript:void(0);" class="search-button search-toggle" id="search-toggle-mobile" title="搜索">
+                            <i class="fas fa-search fa-fw" aria-hidden="true"></i>
+                        </a>
+                        <a href="javascript:void(0);" class="search-button search-clear" id="search-clear-mobile" title="清空">
+                            <i class="fas fa-times-circle fa-fw" aria-hidden="true"></i>
+                        </a>
+                        <span class="search-button search-loading" id="search-loading-mobile">
+                            <i class="fas fa-spinner fa-fw fa-spin" aria-hidden="true"></i>
+                        </span>
+                    </div>
+                    <a href="javascript:void(0);" class="search-cancel" id="search-cancel-mobile">
+                        取消
+                    </a>
+                </div><a class="menu-item" href="/posts/" title="">所有文章</a><a class="menu-item" href="/categories/" title="">分类</a><a class="menu-item" href="/tags/" title="">标签</a><a href="javascript:void(0);" class="menu-item theme-switch" title="切换主题">
+                <i class="fas fa-adjust fa-fw" aria-hidden="true"></i>
+            </a></div>
+    </div>
+</header><div class="search-dropdown desktop">
+        <div id="search-dropdown-desktop"></div>
+    </div>
+    <div class="search-dropdown mobile">
+        <div id="search-dropdown-mobile"></div>
+    </div><main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">目录</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animate__animated animate__flipInX">1. runtime之sema信号锁</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="https://xsc.scccc.cn" title="Author" target="_blank" rel="noopener noreffer author" class="author"><i class="fas fa-user-circle fa-fw" aria-hidden="true"></i>Xsc</a></span>&nbsp;<span class="post-category">收录于 <a href="/categories/go-runtime/"><i class="far fa-folder fa-fw" aria-hidden="true"></i>go runtime</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw" aria-hidden="true"></i>&nbsp;<time datetime="2022-09-03">2022-09-03</time>&nbsp;<i class="fas fa-pencil-alt fa-fw" aria-hidden="true"></i>&nbsp;约 2534 字&nbsp;
+                <i class="far fa-clock fa-fw" aria-hidden="true"></i>&nbsp;预计阅读 6 分钟&nbsp;</div>
+        </div><div class="details toc" id="toc-static"  data-kept="true">
+                <div class="details-summary toc-title">
+                    <span>目录</span>
+                    <span><i class="details-icon fas fa-angle-right" aria-hidden="true"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#获取门锁时传递的uint32地址有什么用">获取门锁时传递的uint32地址有什么用</a></li>
+    <li><a href="#我们通过仓库地址找大门">我们通过仓库地址找大门</a></li>
+    <li><a href="#仓库大门长啥样">仓库大门长啥样</a></li>
+    <li><a href="#简单的拿一个刀">简单的拿一个刀</a></li>
+    <li><a href="#要去拿一个刀">要去拿一个刀</a></li>
+    <li><a href="#刀没直接拿到要去排队等">刀没直接拿到，要去排队等</a></li>
+    <li><a href="#归还一个刀让其他的人也能去用了">归还一个刀，让其他的人也能去用了</a></li>
+    <li><a href="#其他人还刀通知我们来拿刀">其他人还刀，通知我们来拿刀</a></li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><p>假如我们有一个宰🐷厂<code>sema</code>，里面有很多的危险工具，比如刀。</p>
+<p>我们有好几个仓库（不同的<code>addr</code>），里面放着各种各样的刀，每个仓库它们都记录着有多少把刀<code>addr存储的uint32数</code>。</p>
+<p>它们可能好几个仓库里的比较近，会有一个大门统一排队管理（它们会选择到同一个<code>seamRoot</code>）。</p>
+<p>这个大门上面记录了当前有多少人在排队<code>nwait</code>，记录了排队情况<code>treap</code></p>
+<p>大门外面要让去不同的仓库的人排着不同的队伍，这些队伍的头部通过<code>parent</code>、<code>next</code>、<code>prev</code>组成了一个<code>平衡二叉树</code></p>
+<p>队伍里面所有人就是一个<code>链表</code>，通过<code>waitlink</code>进行连接，每个人的<code>waittail</code>记录着它们队伍的最后一个人</p>
+<p>大门的<code>treap</code>上面只记录了每个队伍的第一个人</p>
+<h2 id="获取门锁时传递的uint32地址有什么用">获取门锁时传递的uint32地址有什么用</h2>
+<p>我们在获取和归还刀的时候，都需要从一个uint32的地址上进行寻找锁，这个uint32数值代表着当前仓库里面的刀的数量，uint32的地址就是仓库地址。</p>
+<h2 id="我们通过仓库地址找大门">我们通过仓库地址找大门</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// 我们规划了251个大门，从semtable0～250下标
+</span><span class="c1"></span><span class="kd">const</span> <span class="nx">semTabSize</span> <span class="p">=</span> <span class="mi">251</span> <span class="c1">// semtable长度
+</span><span class="c1"></span>
+<span class="c1">// 每个semtable，里面就是一个大门
+</span><span class="c1"></span><span class="kd">var</span> <span class="nx">semtable</span> <span class="p">[</span><span class="nx">semTabSize</span><span class="p">]</span><span class="kd">struct</span> <span class="p">{</span>
+    <span class="c1">// semaRoot就是大门
+</span><span class="c1"></span>	<span class="nx">root</span> <span class="nx">semaRoot</span>
+	<span class="nx">pad</span>  <span class="p">[</span><span class="nx">cpu</span><span class="p">.</span><span class="nx">CacheLinePadSize</span> <span class="o">-</span> <span class="nx">unsafe</span><span class="p">.</span><span class="nf">Sizeof</span><span class="p">(</span><span class="nx">semaRoot</span><span class="p">{})]</span><span class="kt">byte</span>
+<span class="p">}</span>
+
+<span class="c1">// 下面就是根据我们传进来的地址找大门的一个方法
+</span><span class="c1"></span><span class="kd">func</span> <span class="nf">semroot</span><span class="p">(</span><span class="nx">addr</span> <span class="o">*</span><span class="kt">uint32</span><span class="p">)</span> <span class="o">*</span><span class="nx">semaRoot</span> <span class="p">{</span>
+   <span class="k">return</span> <span class="o">&amp;</span><span class="nx">semtable</span><span class="p">[(</span><span class="nb">uintptr</span><span class="p">(</span><span class="nx">unsafe</span><span class="p">.</span><span class="nf">Pointer</span><span class="p">(</span><span class="nx">addr</span><span class="p">))</span><span class="o">&gt;&gt;</span><span class="mi">3</span><span class="p">)</span><span class="o">%</span><span class="nx">semTabSize</span><span class="p">].</span><span class="nx">root</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h2 id="仓库大门长啥样">仓库大门长啥样</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// semaRoot 就是仓库大门，里面记录着门口等了多少人，排队的队伍，以及队伍里面的人是要去哪个小仓库
+</span><span class="c1"></span><span class="kd">type</span> <span class="nx">semaRoot</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="nx">lock</span>  <span class="nx">mutex</span>
+	<span class="nx">treap</span> <span class="o">*</span><span class="nx">sudog</span> <span class="c1">// 大门进去会有很多小仓库，不同仓库排队队伍的第一个人
+</span><span class="c1"></span>	<span class="nx">nwait</span> <span class="kt">uint32</span> <span class="c1">// 等待的人的数量
+</span><span class="c1"></span><span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h2 id="简单的拿一个刀">简单的拿一个刀</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// 我们获取刀的时候，如果仓库里面还有，那就直接拿走，并返回true，不然就返回false
+</span><span class="c1"></span><span class="kd">func</span> <span class="nf">cansemacquire</span><span class="p">(</span><span class="nx">addr</span> <span class="o">*</span><span class="kt">uint32</span><span class="p">)</span> <span class="kt">bool</span> <span class="p">{</span>
+	<span class="k">for</span> <span class="p">{</span>
+		<span class="nx">v</span> <span class="o">:=</span> <span class="nx">atomic</span><span class="p">.</span><span class="nf">Load</span><span class="p">(</span><span class="nx">addr</span><span class="p">)</span>
+		<span class="k">if</span> <span class="nx">v</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+			<span class="k">return</span> <span class="kc">false</span>
+		<span class="p">}</span>
+		<span class="k">if</span> <span class="nx">atomic</span><span class="p">.</span><span class="nf">Cas</span><span class="p">(</span><span class="nx">addr</span><span class="p">,</span> <span class="nx">v</span><span class="p">,</span> <span class="nx">v</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+			<span class="k">return</span> <span class="kc">true</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h2 id="要去拿一个刀">要去拿一个刀</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// 这个是获取刀的真实的逻辑
+</span><span class="c1"></span><span class="kd">func</span> <span class="nf">semacquire1</span><span class="p">(</span><span class="nx">addr</span> <span class="o">*</span><span class="kt">uint32</span><span class="p">,</span> <span class="nx">lifo</span> <span class="kt">bool</span><span class="p">,</span> <span class="nx">profile</span> <span class="nx">semaProfileFlags</span><span class="p">,</span> <span class="nx">skipframes</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// 是谁来获取，是gp
+</span><span class="c1"></span>	<span class="nx">gp</span> <span class="o">:=</span> <span class="nf">getg</span><span class="p">()</span>
+	<span class="k">if</span> <span class="nx">gp</span> <span class="o">!=</span> <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">curg</span> <span class="p">{</span>
+		<span class="nf">throw</span><span class="p">(</span><span class="s">&#34;semacquire not on the G stack&#34;</span><span class="p">)</span>
+	<span class="p">}</span>
+
+	<span class="c1">// 简单的case，就是仓库里面还有刀
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nf">cansemacquire</span><span class="p">(</span><span class="nx">addr</span><span class="p">)</span> <span class="p">{</span>
+		<span class="k">return</span>
+	<span class="p">}</span>
+
+    <span class="c1">// 下面就是这4步
+</span><span class="c1"></span>    <span class="c1">// 1. 增加大门口等待排队的数量
+</span><span class="c1"></span>    <span class="c1">// 2. 尝试再去看一下我们的仓库里面还有没有刀，如果有，可能是有人归还了，我们就直接拿着走
+</span><span class="c1"></span>    <span class="c1">// 3. 去排队了
+</span><span class="c1"></span>    <span class="c1">// 4. 休眠
+</span><span class="c1"></span>  	<span class="c1">// 新建一个sudog
+</span><span class="c1"></span>	<span class="nx">s</span> <span class="o">:=</span> <span class="nf">acquireSudog</span><span class="p">()</span>
+    <span class="c1">// 获取大门信息
+</span><span class="c1"></span>	<span class="nx">root</span> <span class="o">:=</span> <span class="nf">semroot</span><span class="p">(</span><span class="nx">addr</span><span class="p">)</span>
+	<span class="nx">t0</span> <span class="o">:=</span> <span class="nb">int64</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+	<span class="nx">s</span><span class="p">.</span><span class="nx">releasetime</span> <span class="p">=</span> <span class="mi">0</span>
+	<span class="nx">s</span><span class="p">.</span><span class="nx">acquiretime</span> <span class="p">=</span> <span class="mi">0</span>
+	
+    <span class="c1">// s的ticket是0
+</span><span class="c1"></span>    <span class="nx">s</span><span class="p">.</span><span class="nx">ticket</span> <span class="p">=</span> <span class="mi">0</span>
+	
+	<span class="k">for</span> <span class="p">{</span>
+        <span class="c1">// 大门加锁
+</span><span class="c1"></span>		<span class="nf">lockWithRank</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">root</span><span class="p">.</span><span class="nx">lock</span><span class="p">,</span> <span class="nx">lockRankRoot</span><span class="p">)</span>
+		
+        <span class="c1">// 给大门等待人数量上加1
+</span><span class="c1"></span>		<span class="nx">atomic</span><span class="p">.</span><span class="nf">Xadd</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">root</span><span class="p">.</span><span class="nx">nwait</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+		
+        <span class="c1">// 判断他要去的仓库里面还有没有刀
+</span><span class="c1"></span>		<span class="k">if</span> <span class="nf">cansemacquire</span><span class="p">(</span><span class="nx">addr</span><span class="p">)</span> <span class="p">{</span>
+			<span class="nx">atomic</span><span class="p">.</span><span class="nf">Xadd</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">root</span><span class="p">.</span><span class="nx">nwait</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+			<span class="nf">unlock</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">root</span><span class="p">.</span><span class="nx">lock</span><span class="p">)</span>
+			<span class="k">break</span>
+		<span class="p">}</span>
+        
+		<span class="c1">// 暂时里面没有东西，我们等着吧，就要去排队
+</span><span class="c1"></span>		<span class="nx">root</span><span class="p">.</span><span class="nf">queue</span><span class="p">(</span><span class="nx">addr</span><span class="p">,</span> <span class="nx">s</span><span class="p">,</span> <span class="nx">lifo</span><span class="p">)</span>
+        <span class="c1">// gopark阻塞这个g
+</span><span class="c1"></span>		<span class="nf">goparkunlock</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">root</span><span class="p">.</span><span class="nx">lock</span><span class="p">,</span> <span class="nx">waitReasonSemacquire</span><span class="p">,</span> <span class="nx">traceEvGoBlockSync</span><span class="p">,</span> <span class="mi">4</span><span class="o">+</span><span class="nx">skipframes</span><span class="p">)</span>
+        <span class="c1">// 这边是唤醒了这个g
+</span><span class="c1"></span>        <span class="c1">// 我们的票据不是0的话，或者我们仓库里面有刀的话，就可以得到执行
+</span><span class="c1"></span>		<span class="k">if</span> <span class="nx">s</span><span class="p">.</span><span class="nx">ticket</span> <span class="o">!=</span> <span class="mi">0</span> <span class="o">||</span> <span class="nf">cansemacquire</span><span class="p">(</span><span class="nx">addr</span><span class="p">)</span> <span class="p">{</span>
+			<span class="k">break</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+	
+    <span class="c1">// 释放sudog
+</span><span class="c1"></span>	<span class="nf">releaseSudog</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h2 id="刀没直接拿到要去排队等">刀没直接拿到，要去排队等</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span><span class="lnt">58
+</span><span class="lnt">59
+</span><span class="lnt">60
+</span><span class="lnt">61
+</span><span class="lnt">62
+</span><span class="lnt">63
+</span><span class="lnt">64
+</span><span class="lnt">65
+</span><span class="lnt">66
+</span><span class="lnt">67
+</span><span class="lnt">68
+</span><span class="lnt">69
+</span><span class="lnt">70
+</span><span class="lnt">71
+</span><span class="lnt">72
+</span><span class="lnt">73
+</span><span class="lnt">74
+</span><span class="lnt">75
+</span><span class="lnt">76
+</span><span class="lnt">77
+</span><span class="lnt">78
+</span><span class="lnt">79
+</span><span class="lnt">80
+</span><span class="lnt">81
+</span><span class="lnt">82
+</span><span class="lnt">83
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// 这个就是给semaRoot.treap上面进行排队
+</span><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">root</span> <span class="o">*</span><span class="nx">semaRoot</span><span class="p">)</span> <span class="nf">queue</span><span class="p">(</span><span class="nx">addr</span> <span class="o">*</span><span class="kt">uint32</span><span class="p">,</span> <span class="nx">s</span> <span class="o">*</span><span class="nx">sudog</span><span class="p">,</span> <span class="nx">lifo</span> <span class="kt">bool</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// 拿到我们要排队的人
+</span><span class="c1"></span>	<span class="nx">s</span><span class="p">.</span><span class="nx">g</span> <span class="p">=</span> <span class="nf">getg</span><span class="p">()</span>
+    <span class="c1">// 存一下它要去的仓库在哪
+</span><span class="c1"></span>	<span class="nx">s</span><span class="p">.</span><span class="nx">elem</span> <span class="p">=</span> <span class="nx">unsafe</span><span class="p">.</span><span class="nf">Pointer</span><span class="p">(</span><span class="nx">addr</span><span class="p">)</span>
+  	<span class="c1">// 等我们下面再给他说，它该拍到哪里，前一个队伍是谁，后一个队伍是谁
+</span><span class="c1"></span>	<span class="nx">s</span><span class="p">.</span><span class="nx">next</span> <span class="p">=</span> <span class="kc">nil</span>
+	<span class="nx">s</span><span class="p">.</span><span class="nx">prev</span> <span class="p">=</span> <span class="kc">nil</span>
+	
+	<span class="kd">var</span> <span class="nx">last</span> <span class="o">*</span><span class="nx">sudog</span>
+    <span class="c1">// pt一开始就是第一个队伍第一个人
+</span><span class="c1"></span>	<span class="nx">pt</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">root</span><span class="p">.</span><span class="nx">treap</span>
+    <span class="c1">// for循环，在每个队列里面找我们的小仓库是那个队伍
+</span><span class="c1"></span>	<span class="k">for</span> <span class="nx">t</span> <span class="o">:=</span> <span class="o">*</span><span class="nx">pt</span><span class="p">;</span> <span class="nx">t</span> <span class="o">!=</span> <span class="kc">nil</span><span class="p">;</span> <span class="nx">t</span> <span class="p">=</span> <span class="o">*</span><span class="nx">pt</span> <span class="p">{</span>
+		<span class="k">if</span> <span class="nx">t</span><span class="p">.</span><span class="nx">elem</span> <span class="o">==</span> <span class="nx">unsafe</span><span class="p">.</span><span class="nf">Pointer</span><span class="p">(</span><span class="nx">addr</span><span class="p">)</span> <span class="p">{</span>
+            <span class="c1">// t就是我们小仓库的排队信息
+</span><span class="c1"></span>			<span class="k">if</span> <span class="nx">lifo</span> <span class="p">{</span>
+				<span class="c1">// lifo是说，后入队的，先执行，排到最前面
+</span><span class="c1"></span>                <span class="c1">// prev和next都是队伍第一个人要知道的
+</span><span class="c1"></span>                <span class="c1">// 同一个队伍的不同人是通过waitlink连接的
+</span><span class="c1"></span>                <span class="c1">// 队伍的每个人都能通过waittail知道最后一个人的信息
+</span><span class="c1"></span>				<span class="o">*</span><span class="nx">pt</span> <span class="p">=</span> <span class="nx">s</span>
+				<span class="nx">s</span><span class="p">.</span><span class="nx">ticket</span> <span class="p">=</span> <span class="nx">t</span><span class="p">.</span><span class="nx">ticket</span>
+				<span class="nx">s</span><span class="p">.</span><span class="nx">acquiretime</span> <span class="p">=</span> <span class="nx">t</span><span class="p">.</span><span class="nx">acquiretime</span>
+				<span class="nx">s</span><span class="p">.</span><span class="nx">parent</span> <span class="p">=</span> <span class="nx">t</span><span class="p">.</span><span class="nx">parent</span>
+				<span class="nx">s</span><span class="p">.</span><span class="nx">prev</span> <span class="p">=</span> <span class="nx">t</span><span class="p">.</span><span class="nx">prev</span>
+				<span class="nx">s</span><span class="p">.</span><span class="nx">next</span> <span class="p">=</span> <span class="nx">t</span><span class="p">.</span><span class="nx">next</span>
+				<span class="k">if</span> <span class="nx">s</span><span class="p">.</span><span class="nx">prev</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+					<span class="nx">s</span><span class="p">.</span><span class="nx">prev</span><span class="p">.</span><span class="nx">parent</span> <span class="p">=</span> <span class="nx">s</span>
+				<span class="p">}</span>
+				<span class="k">if</span> <span class="nx">s</span><span class="p">.</span><span class="nx">next</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+					<span class="nx">s</span><span class="p">.</span><span class="nx">next</span><span class="p">.</span><span class="nx">parent</span> <span class="p">=</span> <span class="nx">s</span>
+				<span class="p">}</span>
+				<span class="c1">// Add t first in s&#39;s wait list.
+</span><span class="c1"></span>				<span class="nx">s</span><span class="p">.</span><span class="nx">waitlink</span> <span class="p">=</span> <span class="nx">t</span>
+				<span class="nx">s</span><span class="p">.</span><span class="nx">waittail</span> <span class="p">=</span> <span class="nx">t</span><span class="p">.</span><span class="nx">waittail</span>
+				<span class="k">if</span> <span class="nx">s</span><span class="p">.</span><span class="nx">waittail</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+					<span class="nx">s</span><span class="p">.</span><span class="nx">waittail</span> <span class="p">=</span> <span class="nx">t</span>
+				<span class="p">}</span>
+				<span class="nx">t</span><span class="p">.</span><span class="nx">parent</span> <span class="p">=</span> <span class="kc">nil</span>
+				<span class="nx">t</span><span class="p">.</span><span class="nx">prev</span> <span class="p">=</span> <span class="kc">nil</span>
+				<span class="nx">t</span><span class="p">.</span><span class="nx">next</span> <span class="p">=</span> <span class="kc">nil</span>
+				<span class="nx">t</span><span class="p">.</span><span class="nx">waittail</span> <span class="p">=</span> <span class="kc">nil</span>
+			<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+				<span class="c1">// 把人排队队伍的最后面
+</span><span class="c1"></span>				<span class="k">if</span> <span class="nx">t</span><span class="p">.</span><span class="nx">waittail</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+					<span class="nx">t</span><span class="p">.</span><span class="nx">waitlink</span> <span class="p">=</span> <span class="nx">s</span>
+				<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+					<span class="nx">t</span><span class="p">.</span><span class="nx">waittail</span><span class="p">.</span><span class="nx">waitlink</span> <span class="p">=</span> <span class="nx">s</span>
+				<span class="p">}</span>
+				<span class="nx">t</span><span class="p">.</span><span class="nx">waittail</span> <span class="p">=</span> <span class="nx">s</span>
+				<span class="nx">s</span><span class="p">.</span><span class="nx">waitlink</span> <span class="p">=</span> <span class="kc">nil</span>
+			<span class="p">}</span>
+			<span class="k">return</span>
+		<span class="p">}</span>
+        <span class="c1">// 倒是第二个找到的队伍
+</span><span class="c1"></span>		<span class="nx">last</span> <span class="p">=</span> <span class="nx">t</span>
+        <span class="c1">// 因为我们存储的时候是这样存的，所以我们这边也是这样找的
+</span><span class="c1"></span>		<span class="k">if</span> <span class="nb">uintptr</span><span class="p">(</span><span class="nx">unsafe</span><span class="p">.</span><span class="nf">Pointer</span><span class="p">(</span><span class="nx">addr</span><span class="p">))</span> <span class="p">&lt;</span> <span class="nb">uintptr</span><span class="p">(</span><span class="nx">t</span><span class="p">.</span><span class="nx">elem</span><span class="p">)</span> <span class="p">{</span>
+			<span class="nx">pt</span> <span class="p">=</span> <span class="o">&amp;</span><span class="nx">t</span><span class="p">.</span><span class="nx">prev</span>
+		<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+			<span class="nx">pt</span> <span class="p">=</span> <span class="o">&amp;</span><span class="nx">t</span><span class="p">.</span><span class="nx">next</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+    
+    <span class="c1">// ticket很经常和0进行比对，所以我们让最后1位为1的话，肯定就不是0
+</span><span class="c1"></span>	<span class="nx">s</span><span class="p">.</span><span class="nx">ticket</span> <span class="p">=</span> <span class="nf">fastrand</span><span class="p">()</span> <span class="p">|</span> <span class="mi">1</span>
+	<span class="nx">s</span><span class="p">.</span><span class="nx">parent</span> <span class="p">=</span> <span class="nx">last</span>
+	<span class="o">*</span><span class="nx">pt</span> <span class="p">=</span> <span class="nx">s</span>
+
+	<span class="c1">// 修复这个平衡二叉树，让这个树继续满足条件
+</span><span class="c1"></span>	<span class="k">for</span> <span class="nx">s</span><span class="p">.</span><span class="nx">parent</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">s</span><span class="p">.</span><span class="nx">parent</span><span class="p">.</span><span class="nx">ticket</span> <span class="p">&gt;</span> <span class="nx">s</span><span class="p">.</span><span class="nx">ticket</span> <span class="p">{</span>
+		<span class="k">if</span> <span class="nx">s</span><span class="p">.</span><span class="nx">parent</span><span class="p">.</span><span class="nx">prev</span> <span class="o">==</span> <span class="nx">s</span> <span class="p">{</span>
+			<span class="nx">root</span><span class="p">.</span><span class="nf">rotateRight</span><span class="p">(</span><span class="nx">s</span><span class="p">.</span><span class="nx">parent</span><span class="p">)</span>
+		<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+			<span class="k">if</span> <span class="nx">s</span><span class="p">.</span><span class="nx">parent</span><span class="p">.</span><span class="nx">next</span> <span class="o">!=</span> <span class="nx">s</span> <span class="p">{</span>
+				<span class="nb">panic</span><span class="p">(</span><span class="s">&#34;semaRoot queue&#34;</span><span class="p">)</span>
+			<span class="p">}</span>
+			<span class="nx">root</span><span class="p">.</span><span class="nf">rotateLeft</span><span class="p">(</span><span class="nx">s</span><span class="p">.</span><span class="nx">parent</span><span class="p">)</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h2 id="归还一个刀让其他的人也能去用了">归还一个刀，让其他的人也能去用了</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// 归还一个刀
+</span><span class="c1"></span><span class="kd">func</span> <span class="nf">semrelease1</span><span class="p">(</span><span class="nx">addr</span> <span class="o">*</span><span class="kt">uint32</span><span class="p">,</span> <span class="nx">handoff</span> <span class="kt">bool</span><span class="p">,</span> <span class="nx">skipframes</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// 找到大门
+</span><span class="c1"></span>	<span class="nx">root</span> <span class="o">:=</span> <span class="nf">semroot</span><span class="p">(</span><span class="nx">addr</span><span class="p">)</span>
+    <span class="c1">// 给仓库里面还一把刀
+</span><span class="c1"></span>	<span class="nx">atomic</span><span class="p">.</span><span class="nf">Xadd</span><span class="p">(</span><span class="nx">addr</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+	<span class="c1">// 如果没有人在等，就直接结束就好了
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nx">atomic</span><span class="p">.</span><span class="nf">Load</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">root</span><span class="p">.</span><span class="nx">nwait</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+		<span class="k">return</span>
+	<span class="p">}</span>
+
+	<span class="c1">// 有人在等呢
+</span><span class="c1"></span>    <span class="c1">// 加锁
+</span><span class="c1"></span>	<span class="nf">lockWithRank</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">root</span><span class="p">.</span><span class="nx">lock</span><span class="p">,</span> <span class="nx">lockRankRoot</span><span class="p">)</span>
+    <span class="c1">// 在判断一下，可能有其他人过来了
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nx">atomic</span><span class="p">.</span><span class="nf">Load</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">root</span><span class="p">.</span><span class="nx">nwait</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+		<span class="nf">unlock</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">root</span><span class="p">.</span><span class="nx">lock</span><span class="p">)</span>
+		<span class="k">return</span>
+	<span class="p">}</span>
+    <span class="c1">// 我们找一个sudog让他出来拿刀工作
+</span><span class="c1"></span>	<span class="nx">s</span><span class="p">,</span> <span class="nx">t0</span> <span class="o">:=</span> <span class="nx">root</span><span class="p">.</span><span class="nf">dequeue</span><span class="p">(</span><span class="nx">addr</span><span class="p">)</span>
+    <span class="c1">// 如果找到了，就让大门的等待数量-1
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nx">s</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="nx">atomic</span><span class="p">.</span><span class="nf">Xadd</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">root</span><span class="p">.</span><span class="nx">nwait</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+	<span class="p">}</span>
+    <span class="c1">// 解锁大门
+</span><span class="c1"></span>	<span class="nf">unlock</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">root</span><span class="p">.</span><span class="nx">lock</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">s</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+        <span class="c1">// s.ticket != 0 证明这个ticket不太合法
+</span><span class="c1"></span>        <span class="c1">// 也就是说sudog要执行，必须要把票清空
+</span><span class="c1"></span>		<span class="k">if</span> <span class="nx">s</span><span class="p">.</span><span class="nx">ticket</span> <span class="o">!=</span> <span class="mi">0</span> <span class="p">{</span>
+			<span class="nf">throw</span><span class="p">(</span><span class="s">&#34;corrupted semaphore ticket&#34;</span><span class="p">)</span>
+		<span class="p">}</span>
+        <span class="c1">// 我们再去判断一下能不能拿到刀，能拿到的话，ticket=1
+</span><span class="c1"></span>		<span class="k">if</span> <span class="nx">handoff</span> <span class="o">&amp;&amp;</span> <span class="nf">cansemacquire</span><span class="p">(</span><span class="nx">addr</span><span class="p">)</span> <span class="p">{</span>
+			<span class="nx">s</span><span class="p">.</span><span class="nx">ticket</span> <span class="p">=</span> <span class="mi">1</span>
+		<span class="p">}</span>
+        <span class="c1">// 恢复我们的g，将我们的g放在p的runnext
+</span><span class="c1"></span>		<span class="nf">readyWithTime</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span> <span class="mi">5</span><span class="o">+</span><span class="nx">skipframes</span><span class="p">)</span>
+        <span class="c1">// 如果ticket是1，我们的g的m上没上锁的话
+</span><span class="c1"></span>		<span class="k">if</span> <span class="nx">s</span><span class="p">.</span><span class="nx">ticket</span> <span class="o">==</span> <span class="mi">1</span> <span class="o">&amp;&amp;</span> <span class="nf">getg</span><span class="p">().</span><span class="nx">m</span><span class="p">.</span><span class="nx">locks</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+			<span class="c1">// 如果是饥饿模式，我们直接切换到g执行，不要等了
+</span><span class="c1"></span>			<span class="nf">goyield</span><span class="p">()</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h2 id="其他人还刀通知我们来拿刀">其他人还刀，通知我们来拿刀</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span><span class="lnt">58
+</span><span class="lnt">59
+</span><span class="lnt">60
+</span><span class="lnt">61
+</span><span class="lnt">62
+</span><span class="lnt">63
+</span><span class="lnt">64
+</span><span class="lnt">65
+</span><span class="lnt">66
+</span><span class="lnt">67
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="p">(</span><span class="nx">root</span> <span class="o">*</span><span class="nx">semaRoot</span><span class="p">)</span> <span class="nf">dequeue</span><span class="p">(</span><span class="nx">addr</span> <span class="o">*</span><span class="kt">uint32</span><span class="p">)</span> <span class="p">(</span><span class="nx">found</span> <span class="o">*</span><span class="nx">sudog</span><span class="p">,</span> <span class="nx">now</span> <span class="kt">int64</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// ps就是门锁的第一个队伍的第一个人
+</span><span class="c1"></span>	<span class="nx">ps</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">root</span><span class="p">.</span><span class="nx">treap</span>
+	<span class="nx">s</span> <span class="o">:=</span> <span class="o">*</span><span class="nx">ps</span>
+	<span class="k">for</span> <span class="p">;</span> <span class="nx">s</span> <span class="o">!=</span> <span class="kc">nil</span><span class="p">;</span> <span class="nx">s</span> <span class="p">=</span> <span class="o">*</span><span class="nx">ps</span> <span class="p">{</span>
+		<span class="k">if</span> <span class="nx">s</span><span class="p">.</span><span class="nx">elem</span> <span class="o">==</span> <span class="nx">unsafe</span><span class="p">.</span><span class="nf">Pointer</span><span class="p">(</span><span class="nx">addr</span><span class="p">)</span> <span class="p">{</span>
+            <span class="c1">// 找到我们的队伍了
+</span><span class="c1"></span>			<span class="k">goto</span> <span class="nx">Found</span>
+		<span class="p">}</span>
+		<span class="k">if</span> <span class="nb">uintptr</span><span class="p">(</span><span class="nx">unsafe</span><span class="p">.</span><span class="nf">Pointer</span><span class="p">(</span><span class="nx">addr</span><span class="p">))</span> <span class="p">&lt;</span> <span class="nb">uintptr</span><span class="p">(</span><span class="nx">s</span><span class="p">.</span><span class="nx">elem</span><span class="p">)</span> <span class="p">{</span>
+			<span class="nx">ps</span> <span class="p">=</span> <span class="o">&amp;</span><span class="nx">s</span><span class="p">.</span><span class="nx">prev</span>
+		<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+			<span class="nx">ps</span> <span class="p">=</span> <span class="o">&amp;</span><span class="nx">s</span><span class="p">.</span><span class="nx">next</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+    <span class="c1">// 没找到我们的队伍
+</span><span class="c1"></span>	<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="mi">0</span>
+
+<span class="nx">Found</span><span class="p">:</span>
+    <span class="c1">// 删除我们的sudog
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nx">t</span> <span class="o">:=</span> <span class="nx">s</span><span class="p">.</span><span class="nx">waitlink</span><span class="p">;</span> <span class="nx">t</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="o">*</span><span class="nx">ps</span> <span class="p">=</span> <span class="nx">t</span>
+		<span class="nx">t</span><span class="p">.</span><span class="nx">ticket</span> <span class="p">=</span> <span class="nx">s</span><span class="p">.</span><span class="nx">ticket</span>
+		<span class="nx">t</span><span class="p">.</span><span class="nx">parent</span> <span class="p">=</span> <span class="nx">s</span><span class="p">.</span><span class="nx">parent</span>
+		<span class="nx">t</span><span class="p">.</span><span class="nx">prev</span> <span class="p">=</span> <span class="nx">s</span><span class="p">.</span><span class="nx">prev</span>
+		<span class="k">if</span> <span class="nx">t</span><span class="p">.</span><span class="nx">prev</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="nx">t</span><span class="p">.</span><span class="nx">prev</span><span class="p">.</span><span class="nx">parent</span> <span class="p">=</span> <span class="nx">t</span>
+		<span class="p">}</span>
+		<span class="nx">t</span><span class="p">.</span><span class="nx">next</span> <span class="p">=</span> <span class="nx">s</span><span class="p">.</span><span class="nx">next</span>
+		<span class="k">if</span> <span class="nx">t</span><span class="p">.</span><span class="nx">next</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="nx">t</span><span class="p">.</span><span class="nx">next</span><span class="p">.</span><span class="nx">parent</span> <span class="p">=</span> <span class="nx">t</span>
+		<span class="p">}</span>
+		<span class="k">if</span> <span class="nx">t</span><span class="p">.</span><span class="nx">waitlink</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="nx">t</span><span class="p">.</span><span class="nx">waittail</span> <span class="p">=</span> <span class="nx">s</span><span class="p">.</span><span class="nx">waittail</span>
+		<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+			<span class="nx">t</span><span class="p">.</span><span class="nx">waittail</span> <span class="p">=</span> <span class="kc">nil</span>
+		<span class="p">}</span>
+		<span class="nx">t</span><span class="p">.</span><span class="nx">acquiretime</span> <span class="p">=</span> <span class="nx">now</span>
+		<span class="nx">s</span><span class="p">.</span><span class="nx">waitlink</span> <span class="p">=</span> <span class="kc">nil</span>
+		<span class="nx">s</span><span class="p">.</span><span class="nx">waittail</span> <span class="p">=</span> <span class="kc">nil</span>
+	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="c1">// 删除这个队伍，因为没有人排队了，还要修复一下平衡二叉树
+</span><span class="c1"></span>		<span class="k">for</span> <span class="nx">s</span><span class="p">.</span><span class="nx">next</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">||</span> <span class="nx">s</span><span class="p">.</span><span class="nx">prev</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="k">if</span> <span class="nx">s</span><span class="p">.</span><span class="nx">next</span> <span class="o">==</span> <span class="kc">nil</span> <span class="o">||</span> <span class="nx">s</span><span class="p">.</span><span class="nx">prev</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">s</span><span class="p">.</span><span class="nx">prev</span><span class="p">.</span><span class="nx">ticket</span> <span class="p">&lt;</span> <span class="nx">s</span><span class="p">.</span><span class="nx">next</span><span class="p">.</span><span class="nx">ticket</span> <span class="p">{</span>
+				<span class="nx">root</span><span class="p">.</span><span class="nf">rotateRight</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span>
+			<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+				<span class="nx">root</span><span class="p">.</span><span class="nf">rotateLeft</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span>
+			<span class="p">}</span>
+		<span class="p">}</span>
+		<span class="c1">// Remove s, now a leaf.
+</span><span class="c1"></span>		<span class="k">if</span> <span class="nx">s</span><span class="p">.</span><span class="nx">parent</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="k">if</span> <span class="nx">s</span><span class="p">.</span><span class="nx">parent</span><span class="p">.</span><span class="nx">prev</span> <span class="o">==</span> <span class="nx">s</span> <span class="p">{</span>
+				<span class="nx">s</span><span class="p">.</span><span class="nx">parent</span><span class="p">.</span><span class="nx">prev</span> <span class="p">=</span> <span class="kc">nil</span>
+			<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+				<span class="nx">s</span><span class="p">.</span><span class="nx">parent</span><span class="p">.</span><span class="nx">next</span> <span class="p">=</span> <span class="kc">nil</span>
+			<span class="p">}</span>
+		<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+			<span class="nx">root</span><span class="p">.</span><span class="nx">treap</span> <span class="p">=</span> <span class="kc">nil</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+	<span class="nx">s</span><span class="p">.</span><span class="nx">parent</span> <span class="p">=</span> <span class="kc">nil</span>
+	<span class="nx">s</span><span class="p">.</span><span class="nx">elem</span> <span class="p">=</span> <span class="kc">nil</span>
+	<span class="nx">s</span><span class="p">.</span><span class="nx">next</span> <span class="p">=</span> <span class="kc">nil</span>
+	<span class="nx">s</span><span class="p">.</span><span class="nx">prev</span> <span class="p">=</span> <span class="kc">nil</span>
+	<span class="nx">s</span><span class="p">.</span><span class="nx">ticket</span> <span class="p">=</span> <span class="mi">0</span>
+	<span class="k">return</span> <span class="nx">s</span><span class="p">,</span> <span class="nx">now</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div></div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>更新于 2022-09-03</span>
+            </div></div>
+        <div class="post-info-line">
+            <div class="post-info-md"><span>
+                            <a class="link-to-markdown" href="/1.-runtime%E4%B9%8Bsema%E4%BF%A1%E5%8F%B7%E9%94%81/index.md" target="_blank">阅读原始文档</a>
+                        </span></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="分享到 Hacker News" data-sharer="hackernews" data-url="https://xsc.scccc.cn/1.-runtime%E4%B9%8Bsema%E4%BF%A1%E5%8F%B7%E9%94%81/" data-title="1. runtime之sema信号锁"><i class="fab fa-hacker-news fa-fw" aria-hidden="true"></i></a><a href="javascript:void(0);" title="分享到 Line" data-sharer="line" data-url="https://xsc.scccc.cn/1.-runtime%E4%B9%8Bsema%E4%BF%A1%E5%8F%B7%E9%94%81/" data-title="1. runtime之sema信号锁"><i data-svg-src="https://cdn.jsdelivr.net/npm/simple-icons@7.3.0/icons/line.svg" aria-hidden="true"></i></a><a href="javascript:void(0);" title="分享到 微博" data-sharer="weibo" data-url="https://xsc.scccc.cn/1.-runtime%E4%B9%8Bsema%E4%BF%A1%E5%8F%B7%E9%94%81/" data-title="1. runtime之sema信号锁"><i class="fab fa-weibo fa-fw" aria-hidden="true"></i></a><a href="javascript:void(0);" title="分享到 百度" data-sharer="baidu" data-url="https://xsc.scccc.cn/1.-runtime%E4%B9%8Bsema%E4%BF%A1%E5%8F%B7%E9%94%81/" data-title="1. runtime之sema信号锁"><i data-svg-src="https://cdn.jsdelivr.net/npm/simple-icons@7.3.0/icons/baidu.svg" aria-hidden="true"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw" aria-hidden="true"></i>&nbsp;<a href="/tags/runtime/">runtime</a>,&nbsp;<a href="/tags/go%E5%BA%95%E5%B1%82%E5%AE%9E%E7%8E%B0/">go底层实现</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">返回</a></span>&nbsp;|&nbsp;<span><a href="/">主页</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav">
+            <a href="/2.-runtime%E4%B9%8Bnotifylist%E6%9D%A1%E4%BB%B6%E5%94%A4%E9%86%92/" class="next" rel="next" title="2. runtime之notifyList条件唤醒">2. runtime之notifyList条件唤醒<i class="fas fa-angle-right fa-fw" aria-hidden="true"></i></a></div>
+</div>
+<div id="comments"><div id="utterances" class="comment"></div><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">utterances</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line" itemscope itemtype="http://schema.org/CreativeWork"><i class="far fa-copyright fa-fw" aria-hidden="true"></i><span itemprop="copyrightYear">2022 - 2024</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="https://xsc.scccc.cn" target="_blank">Xsc</a></span>&nbsp;|&nbsp;<span class="license"><a rel="license external nofollow noopener noreffer" href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank">CC BY-NC 4.0</a></span><span class="icp-splitter">&nbsp;|&nbsp;</span><br class="icp-br"/>
+                    <span class="icp"><a href="https://beian.miit.gov.cn">晋ICP备20005176号-1</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="回到顶部">
+                <i class="fas fa-arrow-up fa-fw" aria-hidden="true"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="查看评论">
+                <i class="fas fa-comment fa-fw" aria-hidden="true"></i>
+            </a>
+        </div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@2.5.0/css/lightgallery-bundle.min.css"><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/autocomplete.js@0.38.1/dist/autocomplete.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lunr@2.3.9/lunr.min.js"></script><script type="text/javascript" src="/lib/lunr/lunr.stemmer.support.min.js"></script><script type="text/javascript" src="/lib/lunr/lunr.zh.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lazysizes@5.3.2/lazysizes.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/dist/twemoji.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery@2.5.0/lightgallery.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery@2.5.0/plugins/thumbnail/lg-thumbnail.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery@2.5.0/plugins/zoom/lg-zoom.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sharer.js@0.5.1/sharer.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/typeit@8.6.0/dist/index.umd.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"复制到剪贴板","maxShownLines":50},"comment":{"utterances":{"darkTheme":"github-dark","issueTerm":"pathname","label":"actposts","lightTheme":"github-light","repo":"xue1213888/xue1213888"}},"data":{"id-1":"Xsc Study Notes","id-2":"Xsc Study Notes"},"lightgallery":true,"search":{"highlightTag":"em","lunrIndexURL":"/index.json","lunrLanguageCode":"zh","lunrSegmentitURL":"/lib/lunr/lunr.segmentit.js","maxResultLength":10,"noResultsFound":"没有找到结果","snippetLength":30,"type":"lunr"},"twemoji":true,"typeit":{"cursorChar":"|","cursorSpeed":1000,"data":{"id-1":["id-1"],"id-2":["id-2"]},"duration":-1,"speed":100}};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>

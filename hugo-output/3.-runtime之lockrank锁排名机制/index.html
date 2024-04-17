@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <title>3. runtime之lockRank锁排名机制 - 🏠 Xsc Study Notes</title><meta name="Description" content="为了更好的学习总结回顾，建立了这个blog，这里是我的学习笔记。"><meta property="og:title" content="3. runtime之lockRank锁排名机制" />
+<meta property="og:description" content="在runtime.mutex中内嵌了一个叫lockRankStruct的结构体，看名字我们就知道是做锁排名的。mutex我们在runtime" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://xsc.scccc.cn/3.-runtime%E4%B9%8Blockrank%E9%94%81%E6%8E%92%E5%90%8D%E6%9C%BA%E5%88%B6/" />
+<meta property="article:published_time" content="2022-09-04T01:38:00+08:00" />
+<meta property="article:modified_time" content="2022-09-04T01:38:00+08:00" /><meta property="og:site_name" content="🏠 Xsc Study Notes" />
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="3. runtime之lockRank锁排名机制"/>
+<meta name="twitter:description" content="在runtime.mutex中内嵌了一个叫lockRankStruct的结构体，看名字我们就知道是做锁排名的。mutex我们在runtime"/>
+<meta name="application-name" content="🏠 Xsc Study Notes">
+<meta name="apple-mobile-web-app-title" content="🏠 Xsc Study Notes"><meta name="theme-color" content="#ffffff"><meta name="msapplication-TileColor" content="#da532c"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://xsc.scccc.cn/3.-runtime%E4%B9%8Blockrank%E9%94%81%E6%8E%92%E5%90%8D%E6%9C%BA%E5%88%B6/" /><link rel="prev" href="https://xsc.scccc.cn/2.-runtime%E4%B9%8Bnotifylist%E6%9D%A1%E4%BB%B6%E5%94%A4%E9%86%92/" /><link rel="next" href="https://xsc.scccc.cn/4.-runtime%E4%B9%8Bmutex%E7%BA%BF%E7%A8%8B%E9%94%81%E7%9A%84%E5%AE%9E%E7%8E%B0/" /><link rel="stylesheet" href="/css/style.min.css"><link rel="preload" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.1.1/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+        <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.1.1/css/all.min.css"></noscript><link rel="preload" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+        <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css"></noscript><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "3. runtime之lockRank锁排名机制",
+        "inLanguage": "zh-CN",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https:\/\/xsc.scccc.cn\/3.-runtime%E4%B9%8Blockrank%E9%94%81%E6%8E%92%E5%90%8D%E6%9C%BA%E5%88%B6\/"
+        },"genre": "posts","keywords": "runtime, go底层实现","wordcount":  2479 ,
+        "url": "https:\/\/xsc.scccc.cn\/3.-runtime%E4%B9%8Blockrank%E9%94%81%E6%8E%92%E5%90%8D%E6%9C%BA%E5%88%B6\/","datePublished": "2022-09-04T01:38:00+08:00","dateModified": "2022-09-04T01:38:00+08:00","publisher": {
+            "@type": "Organization",
+            "name": ""},"author": {
+                "@type": "Person",
+                "name": "Xsc"
+            },"description": ""
+    }
+    </script></head>
+    <body data-header-desktop="auto" data-header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="🏠 Xsc Study Notes"><span class="header-title-pre">🏠 </span><span id="id-1" class="typeit"></span></a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> 所有文章 </a><a class="menu-item" href="/categories/"> 分类 </a><a class="menu-item" href="/tags/"> 标签 </a><span class="menu-item delimiter"></span><span class="menu-item search" id="search-desktop">
+                        <input type="text" placeholder="想找什么就来找吧" id="search-input-desktop">
+                        <a href="javascript:void(0);" class="search-button search-toggle" id="search-toggle-desktop" title="搜索">
+                            <i class="fas fa-search fa-fw" aria-hidden="true"></i>
+                        </a>
+                        <a href="javascript:void(0);" class="search-button search-clear" id="search-clear-desktop" title="清空">
+                            <i class="fas fa-times-circle fa-fw" aria-hidden="true"></i>
+                        </a>
+                        <span class="search-button search-loading" id="search-loading-desktop">
+                            <i class="fas fa-spinner fa-fw fa-spin" aria-hidden="true"></i>
+                        </span>
+                    </span><a href="javascript:void(0);" class="menu-item theme-switch" title="切换主题">
+                    <i class="fas fa-adjust fa-fw" aria-hidden="true"></i>
+                </a></div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="🏠 Xsc Study Notes"><span class="header-title-pre">🏠 </span><span id="id-2" class="typeit"></span></a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><div class="search-wrapper">
+                    <div class="search mobile" id="search-mobile">
+                        <input type="text" placeholder="想找什么就来找吧" id="search-input-mobile">
+                        <a href="javascript:void(0);" class="search-button search-toggle" id="search-toggle-mobile" title="搜索">
+                            <i class="fas fa-search fa-fw" aria-hidden="true"></i>
+                        </a>
+                        <a href="javascript:void(0);" class="search-button search-clear" id="search-clear-mobile" title="清空">
+                            <i class="fas fa-times-circle fa-fw" aria-hidden="true"></i>
+                        </a>
+                        <span class="search-button search-loading" id="search-loading-mobile">
+                            <i class="fas fa-spinner fa-fw fa-spin" aria-hidden="true"></i>
+                        </span>
+                    </div>
+                    <a href="javascript:void(0);" class="search-cancel" id="search-cancel-mobile">
+                        取消
+                    </a>
+                </div><a class="menu-item" href="/posts/" title="">所有文章</a><a class="menu-item" href="/categories/" title="">分类</a><a class="menu-item" href="/tags/" title="">标签</a><a href="javascript:void(0);" class="menu-item theme-switch" title="切换主题">
+                <i class="fas fa-adjust fa-fw" aria-hidden="true"></i>
+            </a></div>
+    </div>
+</header><div class="search-dropdown desktop">
+        <div id="search-dropdown-desktop"></div>
+    </div>
+    <div class="search-dropdown mobile">
+        <div id="search-dropdown-mobile"></div>
+    </div><main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">目录</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animate__animated animate__flipInX">3. runtime之lockRank锁排名机制</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="https://xsc.scccc.cn" title="Author" target="_blank" rel="noopener noreffer author" class="author"><i class="fas fa-user-circle fa-fw" aria-hidden="true"></i>Xsc</a></span>&nbsp;<span class="post-category">收录于 <a href="/categories/go-runtime/"><i class="far fa-folder fa-fw" aria-hidden="true"></i>go runtime</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw" aria-hidden="true"></i>&nbsp;<time datetime="2022-09-04">2022-09-04</time>&nbsp;<i class="fas fa-pencil-alt fa-fw" aria-hidden="true"></i>&nbsp;约 2479 字&nbsp;
+                <i class="far fa-clock fa-fw" aria-hidden="true"></i>&nbsp;预计阅读 5 分钟&nbsp;</div>
+        </div><div class="details toc" id="toc-static"  data-kept="true">
+                <div class="details-summary toc-title">
+                    <span>目录</span>
+                    <span><i class="details-icon fas fa-angle-right" aria-hidden="true"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#排名结构">排名结构</a></li>
+    <li><a href="#锁排名的初始化">锁排名的初始化</a></li>
+    <li><a href="#直接获取锁上面的排名">直接获取锁上面的排名</a></li>
+    <li><a href="#带排名加锁">带排名加锁</a></li>
+    <li><a href="#真正的锁排名检查机制">真正的锁排名检查机制</a></li>
+    <li><a href="#释放锁以及排名信息">释放锁以及排名信息</a></li>
+    <li><a href="#判断排名合不合法">判断排名合不合法</a></li>
+    <li><a href="#判断g是否持有锁l">判断g是否持有锁l</a></li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><p>在<code>runtime.mutex</code>中内嵌了一个叫<code>lockRankStruct</code>的结构体，看名字我们就知道是做锁排名的。<code>mutex</code>我们在<code>runtime系列</code>的<code>第四篇</code>文章讲到。</p>
+<p>它其实很简单，一开始我们的锁，只能有一个人持有，等他释放了，其他人才能来获取锁。</p>
+<p>现在有了这个锁排名机制，当我们要来获取锁的时候，我们首先看这个锁有没有被持有，最后来的一个持有这个锁的人的等级是不是比我们低，如果比我们低的话，我们要去查一下我们的表，看看当他持有锁的时候，我们能不能继续获取锁。如果能，我们就能直接获取锁。</p>
+<p>这个静态排名检查功能，我们要在<code>GOEXPERIMENT</code>开启<code>staticklockranking</code>才有效</p>
+<h2 id="排名结构">排名结构</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span><span class="lnt">58
+</span><span class="lnt">59
+</span><span class="lnt">60
+</span><span class="lnt">61
+</span><span class="lnt">62
+</span><span class="lnt">63
+</span><span class="lnt">64
+</span><span class="lnt">65
+</span><span class="lnt">66
+</span><span class="lnt">67
+</span><span class="lnt">68
+</span><span class="lnt">69
+</span><span class="lnt">70
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// 锁的排名本质就是一个数字
+</span><span class="c1"></span><span class="kd">type</span> <span class="nx">lockRank</span> <span class="kt">int</span>
+
+<span class="c1">// 包装了一个排名结构，里面的pad是用来填充，让lockRankStruct是8字节的
+</span><span class="c1"></span><span class="kd">type</span> <span class="nx">lockRankStruct</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="nx">rank</span> <span class="nx">lockRank</span>
+	<span class="nx">pad</span> <span class="kt">int</span>
+<span class="p">}</span>
+
+<span class="c1">// 这就是我们查询是否能同时持有锁的一个表
+</span><span class="c1">// 一维数组表示不同的锁，里面存着它们的等级，刚好它们的下标也是它们的等级
+</span><span class="c1">// 二维数组就是当我们要持有锁的时候查询表来看看前一个是不是在自己的合法锁里面，如果不在，我们也不能同时持有这两个锁
+</span><span class="c1"></span><span class="kd">var</span> <span class="nx">lockPartialOrder</span> <span class="p">[][]</span><span class="nx">lockRank</span> <span class="p">=</span> <span class="p">[][]</span><span class="nx">lockRank</span><span class="p">{</span>
+	<span class="nx">lockRankDummy</span><span class="p">:</span>         <span class="p">{},</span>
+	<span class="nx">lockRankSysmon</span><span class="p">:</span>        <span class="p">{},</span>
+	<span class="nx">lockRankScavenge</span><span class="p">:</span>      <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">},</span>
+	<span class="nx">lockRankForcegc</span><span class="p">:</span>       <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">},</span>
+	<span class="nx">lockRankSweepWaiters</span><span class="p">:</span>  <span class="p">{},</span>
+	<span class="nx">lockRankAssistQueue</span><span class="p">:</span>   <span class="p">{},</span>
+	<span class="nx">lockRankCpuprof</span><span class="p">:</span>       <span class="p">{},</span>
+	<span class="nx">lockRankSweep</span><span class="p">:</span>         <span class="p">{},</span>
+	<span class="nx">lockRankPollDesc</span><span class="p">:</span>      <span class="p">{},</span>
+	<span class="nx">lockRankSched</span><span class="p">:</span>         <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankForcegc</span><span class="p">,</span> <span class="nx">lockRankSweepWaiters</span><span class="p">,</span> <span class="nx">lockRankAssistQueue</span><span class="p">,</span> <span class="nx">lockRankCpuprof</span><span class="p">,</span> <span class="nx">lockRankSweep</span><span class="p">,</span> <span class="nx">lockRankPollDesc</span><span class="p">},</span>
+	<span class="nx">lockRankDeadlock</span><span class="p">:</span>      <span class="p">{</span><span class="nx">lockRankDeadlock</span><span class="p">},</span>
+	<span class="nx">lockRankAllg</span><span class="p">:</span>          <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">},</span>
+	<span class="nx">lockRankAllp</span><span class="p">:</span>          <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">},</span>
+	<span class="nx">lockRankTimers</span><span class="p">:</span>        <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankPollDesc</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">,</span> <span class="nx">lockRankAllp</span><span class="p">,</span> <span class="nx">lockRankTimers</span><span class="p">},</span>
+	<span class="nx">lockRankItab</span><span class="p">:</span>          <span class="p">{},</span>
+	<span class="nx">lockRankReflectOffs</span><span class="p">:</span>   <span class="p">{</span><span class="nx">lockRankItab</span><span class="p">},</span>
+	<span class="nx">lockRankHchan</span><span class="p">:</span>         <span class="p">{</span><span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankSweep</span><span class="p">,</span> <span class="nx">lockRankHchan</span><span class="p">},</span>
+	<span class="nx">lockRankTraceBuf</span><span class="p">:</span>      <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankScavenge</span><span class="p">},</span>
+	<span class="nx">lockRankFin</span><span class="p">:</span>           <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">,</span> <span class="nx">lockRankAllg</span><span class="p">,</span> <span class="nx">lockRankTimers</span><span class="p">,</span> <span class="nx">lockRankReflectOffs</span><span class="p">,</span> <span class="nx">lockRankHchan</span><span class="p">,</span> <span class="nx">lockRankTraceBuf</span><span class="p">},</span>
+	<span class="nx">lockRankNotifyList</span><span class="p">:</span>    <span class="p">{},</span>
+	<span class="nx">lockRankTraceStrings</span><span class="p">:</span>  <span class="p">{</span><span class="nx">lockRankTraceBuf</span><span class="p">},</span>
+	<span class="nx">lockRankMspanSpecial</span><span class="p">:</span>  <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankAssistQueue</span><span class="p">,</span> <span class="nx">lockRankCpuprof</span><span class="p">,</span> <span class="nx">lockRankSweep</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">,</span> <span class="nx">lockRankAllg</span><span class="p">,</span> <span class="nx">lockRankAllp</span><span class="p">,</span> <span class="nx">lockRankTimers</span><span class="p">,</span> <span class="nx">lockRankItab</span><span class="p">,</span> <span class="nx">lockRankReflectOffs</span><span class="p">,</span> <span class="nx">lockRankHchan</span><span class="p">,</span> <span class="nx">lockRankTraceBuf</span><span class="p">,</span> <span class="nx">lockRankNotifyList</span><span class="p">,</span> <span class="nx">lockRankTraceStrings</span><span class="p">},</span>
+	<span class="nx">lockRankProf</span><span class="p">:</span>          <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankAssistQueue</span><span class="p">,</span> <span class="nx">lockRankCpuprof</span><span class="p">,</span> <span class="nx">lockRankSweep</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">,</span> <span class="nx">lockRankAllg</span><span class="p">,</span> <span class="nx">lockRankAllp</span><span class="p">,</span> <span class="nx">lockRankTimers</span><span class="p">,</span> <span class="nx">lockRankItab</span><span class="p">,</span> <span class="nx">lockRankReflectOffs</span><span class="p">,</span> <span class="nx">lockRankHchan</span><span class="p">,</span> <span class="nx">lockRankTraceBuf</span><span class="p">,</span> <span class="nx">lockRankNotifyList</span><span class="p">,</span> <span class="nx">lockRankTraceStrings</span><span class="p">},</span>
+	<span class="nx">lockRankGcBitsArenas</span><span class="p">:</span>  <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankAssistQueue</span><span class="p">,</span> <span class="nx">lockRankCpuprof</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">,</span> <span class="nx">lockRankAllg</span><span class="p">,</span> <span class="nx">lockRankTimers</span><span class="p">,</span> <span class="nx">lockRankItab</span><span class="p">,</span> <span class="nx">lockRankReflectOffs</span><span class="p">,</span> <span class="nx">lockRankHchan</span><span class="p">,</span> <span class="nx">lockRankTraceBuf</span><span class="p">,</span> <span class="nx">lockRankNotifyList</span><span class="p">,</span> <span class="nx">lockRankTraceStrings</span><span class="p">},</span>
+	<span class="nx">lockRankRoot</span><span class="p">:</span>          <span class="p">{},</span>
+	<span class="nx">lockRankTrace</span><span class="p">:</span>         <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankForcegc</span><span class="p">,</span> <span class="nx">lockRankAssistQueue</span><span class="p">,</span> <span class="nx">lockRankSweep</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">,</span> <span class="nx">lockRankHchan</span><span class="p">,</span> <span class="nx">lockRankTraceBuf</span><span class="p">,</span> <span class="nx">lockRankTraceStrings</span><span class="p">,</span> <span class="nx">lockRankRoot</span><span class="p">},</span>
+	<span class="nx">lockRankTraceStackTab</span><span class="p">:</span> <span class="p">{</span><span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankForcegc</span><span class="p">,</span> <span class="nx">lockRankSweepWaiters</span><span class="p">,</span> <span class="nx">lockRankAssistQueue</span><span class="p">,</span> <span class="nx">lockRankSweep</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">,</span> <span class="nx">lockRankAllg</span><span class="p">,</span> <span class="nx">lockRankTimers</span><span class="p">,</span> <span class="nx">lockRankHchan</span><span class="p">,</span> <span class="nx">lockRankTraceBuf</span><span class="p">,</span> <span class="nx">lockRankFin</span><span class="p">,</span> <span class="nx">lockRankNotifyList</span><span class="p">,</span> <span class="nx">lockRankTraceStrings</span><span class="p">,</span> <span class="nx">lockRankRoot</span><span class="p">,</span> <span class="nx">lockRankTrace</span><span class="p">},</span>
+	<span class="nx">lockRankNetpollInit</span><span class="p">:</span>   <span class="p">{</span><span class="nx">lockRankTimers</span><span class="p">},</span>
+
+	<span class="nx">lockRankRwmutexW</span><span class="p">:</span> <span class="p">{},</span>
+	<span class="nx">lockRankRwmutexR</span><span class="p">:</span> <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankRwmutexW</span><span class="p">},</span>
+
+	<span class="nx">lockRankSpanSetSpine</span><span class="p">:</span>  <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankForcegc</span><span class="p">,</span> <span class="nx">lockRankAssistQueue</span><span class="p">,</span> <span class="nx">lockRankCpuprof</span><span class="p">,</span> <span class="nx">lockRankSweep</span><span class="p">,</span> <span class="nx">lockRankPollDesc</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">,</span> <span class="nx">lockRankAllg</span><span class="p">,</span> <span class="nx">lockRankAllp</span><span class="p">,</span> <span class="nx">lockRankTimers</span><span class="p">,</span> <span class="nx">lockRankItab</span><span class="p">,</span> <span class="nx">lockRankReflectOffs</span><span class="p">,</span> <span class="nx">lockRankHchan</span><span class="p">,</span> <span class="nx">lockRankTraceBuf</span><span class="p">,</span> <span class="nx">lockRankNotifyList</span><span class="p">,</span> <span class="nx">lockRankTraceStrings</span><span class="p">},</span>
+	<span class="nx">lockRankGscan</span><span class="p">:</span>         <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankForcegc</span><span class="p">,</span> <span class="nx">lockRankSweepWaiters</span><span class="p">,</span> <span class="nx">lockRankAssistQueue</span><span class="p">,</span> <span class="nx">lockRankCpuprof</span><span class="p">,</span> <span class="nx">lockRankSweep</span><span class="p">,</span> <span class="nx">lockRankPollDesc</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">,</span> <span class="nx">lockRankTimers</span><span class="p">,</span> <span class="nx">lockRankItab</span><span class="p">,</span> <span class="nx">lockRankReflectOffs</span><span class="p">,</span> <span class="nx">lockRankHchan</span><span class="p">,</span> <span class="nx">lockRankTraceBuf</span><span class="p">,</span> <span class="nx">lockRankFin</span><span class="p">,</span> <span class="nx">lockRankNotifyList</span><span class="p">,</span> <span class="nx">lockRankTraceStrings</span><span class="p">,</span> <span class="nx">lockRankProf</span><span class="p">,</span> <span class="nx">lockRankGcBitsArenas</span><span class="p">,</span> <span class="nx">lockRankRoot</span><span class="p">,</span> <span class="nx">lockRankTrace</span><span class="p">,</span> <span class="nx">lockRankTraceStackTab</span><span class="p">,</span> <span class="nx">lockRankNetpollInit</span><span class="p">,</span> <span class="nx">lockRankSpanSetSpine</span><span class="p">},</span>
+	<span class="nx">lockRankStackpool</span><span class="p">:</span>     <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankSweepWaiters</span><span class="p">,</span> <span class="nx">lockRankAssistQueue</span><span class="p">,</span> <span class="nx">lockRankCpuprof</span><span class="p">,</span> <span class="nx">lockRankSweep</span><span class="p">,</span> <span class="nx">lockRankPollDesc</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">,</span> <span class="nx">lockRankTimers</span><span class="p">,</span> <span class="nx">lockRankItab</span><span class="p">,</span> <span class="nx">lockRankReflectOffs</span><span class="p">,</span> <span class="nx">lockRankHchan</span><span class="p">,</span> <span class="nx">lockRankTraceBuf</span><span class="p">,</span> <span class="nx">lockRankFin</span><span class="p">,</span> <span class="nx">lockRankNotifyList</span><span class="p">,</span> <span class="nx">lockRankTraceStrings</span><span class="p">,</span> <span class="nx">lockRankProf</span><span class="p">,</span> <span class="nx">lockRankGcBitsArenas</span><span class="p">,</span> <span class="nx">lockRankRoot</span><span class="p">,</span> <span class="nx">lockRankTrace</span><span class="p">,</span> <span class="nx">lockRankTraceStackTab</span><span class="p">,</span> <span class="nx">lockRankNetpollInit</span><span class="p">,</span> <span class="nx">lockRankRwmutexR</span><span class="p">,</span> <span class="nx">lockRankSpanSetSpine</span><span class="p">,</span> <span class="nx">lockRankGscan</span><span class="p">},</span>
+	<span class="nx">lockRankStackLarge</span><span class="p">:</span>    <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankAssistQueue</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">,</span> <span class="nx">lockRankItab</span><span class="p">,</span> <span class="nx">lockRankHchan</span><span class="p">,</span> <span class="nx">lockRankProf</span><span class="p">,</span> <span class="nx">lockRankGcBitsArenas</span><span class="p">,</span> <span class="nx">lockRankRoot</span><span class="p">,</span> <span class="nx">lockRankSpanSetSpine</span><span class="p">,</span> <span class="nx">lockRankGscan</span><span class="p">},</span>
+	<span class="nx">lockRankDefer</span><span class="p">:</span>         <span class="p">{},</span>
+	<span class="nx">lockRankSudog</span><span class="p">:</span>         <span class="p">{</span><span class="nx">lockRankHchan</span><span class="p">,</span> <span class="nx">lockRankNotifyList</span><span class="p">},</span>
+	<span class="nx">lockRankWbufSpans</span><span class="p">:</span>     <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankSweepWaiters</span><span class="p">,</span> <span class="nx">lockRankAssistQueue</span><span class="p">,</span> <span class="nx">lockRankSweep</span><span class="p">,</span> <span class="nx">lockRankPollDesc</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">,</span> <span class="nx">lockRankAllg</span><span class="p">,</span> <span class="nx">lockRankTimers</span><span class="p">,</span> <span class="nx">lockRankItab</span><span class="p">,</span> <span class="nx">lockRankReflectOffs</span><span class="p">,</span> <span class="nx">lockRankHchan</span><span class="p">,</span> <span class="nx">lockRankFin</span><span class="p">,</span> <span class="nx">lockRankNotifyList</span><span class="p">,</span> <span class="nx">lockRankTraceStrings</span><span class="p">,</span> <span class="nx">lockRankMspanSpecial</span><span class="p">,</span> <span class="nx">lockRankProf</span><span class="p">,</span> <span class="nx">lockRankRoot</span><span class="p">,</span> <span class="nx">lockRankGscan</span><span class="p">,</span> <span class="nx">lockRankDefer</span><span class="p">,</span> <span class="nx">lockRankSudog</span><span class="p">},</span>
+	<span class="nx">lockRankMheap</span><span class="p">:</span>         <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankSweepWaiters</span><span class="p">,</span> <span class="nx">lockRankAssistQueue</span><span class="p">,</span> <span class="nx">lockRankCpuprof</span><span class="p">,</span> <span class="nx">lockRankSweep</span><span class="p">,</span> <span class="nx">lockRankPollDesc</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">,</span> <span class="nx">lockRankAllg</span><span class="p">,</span> <span class="nx">lockRankAllp</span><span class="p">,</span> <span class="nx">lockRankTimers</span><span class="p">,</span> <span class="nx">lockRankItab</span><span class="p">,</span> <span class="nx">lockRankReflectOffs</span><span class="p">,</span> <span class="nx">lockRankHchan</span><span class="p">,</span> <span class="nx">lockRankTraceBuf</span><span class="p">,</span> <span class="nx">lockRankFin</span><span class="p">,</span> <span class="nx">lockRankNotifyList</span><span class="p">,</span> <span class="nx">lockRankTraceStrings</span><span class="p">,</span> <span class="nx">lockRankMspanSpecial</span><span class="p">,</span> <span class="nx">lockRankProf</span><span class="p">,</span> <span class="nx">lockRankGcBitsArenas</span><span class="p">,</span> <span class="nx">lockRankRoot</span><span class="p">,</span> <span class="nx">lockRankSpanSetSpine</span><span class="p">,</span> <span class="nx">lockRankGscan</span><span class="p">,</span> <span class="nx">lockRankStackpool</span><span class="p">,</span> <span class="nx">lockRankStackLarge</span><span class="p">,</span> <span class="nx">lockRankDefer</span><span class="p">,</span> <span class="nx">lockRankSudog</span><span class="p">,</span> <span class="nx">lockRankWbufSpans</span><span class="p">},</span>
+	<span class="nx">lockRankMheapSpecial</span><span class="p">:</span>  <span class="p">{</span><span class="nx">lockRankSysmon</span><span class="p">,</span> <span class="nx">lockRankScavenge</span><span class="p">,</span> <span class="nx">lockRankAssistQueue</span><span class="p">,</span> <span class="nx">lockRankCpuprof</span><span class="p">,</span> <span class="nx">lockRankSweep</span><span class="p">,</span> <span class="nx">lockRankPollDesc</span><span class="p">,</span> <span class="nx">lockRankSched</span><span class="p">,</span> <span class="nx">lockRankAllg</span><span class="p">,</span> <span class="nx">lockRankAllp</span><span class="p">,</span> <span class="nx">lockRankTimers</span><span class="p">,</span> <span class="nx">lockRankItab</span><span class="p">,</span> <span class="nx">lockRankReflectOffs</span><span class="p">,</span> <span class="nx">lockRankHchan</span><span class="p">,</span> <span class="nx">lockRankTraceBuf</span><span class="p">,</span> <span class="nx">lockRankNotifyList</span><span class="p">,</span> <span class="nx">lockRankTraceStrings</span><span class="p">},</span>
+	<span class="nx">lockRankGlobalAlloc</span><span class="p">:</span>   <span class="p">{</span><span class="nx">lockRankProf</span><span class="p">,</span> <span class="nx">lockRankSpanSetSpine</span><span class="p">,</span> <span class="nx">lockRankMheap</span><span class="p">,</span> <span class="nx">lockRankMheapSpecial</span><span class="p">},</span>
+	<span class="nx">lockRankPageAllocScav</span><span class="p">:</span> <span class="p">{</span><span class="nx">lockRankMheap</span><span class="p">},</span>
+
+	<span class="nx">lockRankGFree</span><span class="p">:</span>     <span class="p">{</span><span class="nx">lockRankSched</span><span class="p">},</span>
+	<span class="nx">lockRankHchanLeaf</span><span class="p">:</span> <span class="p">{</span><span class="nx">lockRankGscan</span><span class="p">,</span> <span class="nx">lockRankHchanLeaf</span><span class="p">},</span>
+	<span class="nx">lockRankPanic</span><span class="p">:</span>     <span class="p">{</span><span class="nx">lockRankDeadlock</span><span class="p">},</span> <span class="c1">// plus any other lock held on throw.
+</span><span class="c1"></span>
+	<span class="nx">lockRankNewmHandoff</span><span class="p">:</span>   <span class="p">{},</span>
+	<span class="nx">lockRankDebugPtrmask</span><span class="p">:</span>  <span class="p">{},</span>
+	<span class="nx">lockRankFaketimeState</span><span class="p">:</span> <span class="p">{},</span>
+	<span class="nx">lockRankTicks</span><span class="p">:</span>         <span class="p">{},</span>
+	<span class="nx">lockRankRaceFini</span><span class="p">:</span>      <span class="p">{},</span>
+	<span class="nx">lockRankPollCache</span><span class="p">:</span>     <span class="p">{},</span>
+	<span class="nx">lockRankDebug</span><span class="p">:</span>         <span class="p">{},</span>
+<span class="p">}</span>
+
+</code></pre></td></tr></table>
+</div>
+</div><h2 id="锁排名的初始化">锁排名的初始化</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// 其实就是给mutex上加上了这个排名数字
+</span><span class="c1"></span><span class="kd">func</span> <span class="nf">lockInit</span><span class="p">(</span><span class="nx">l</span> <span class="o">*</span><span class="nx">mutex</span><span class="p">,</span> <span class="nx">rank</span> <span class="nx">lockRank</span><span class="p">)</span> <span class="p">{</span>
+	<span class="nx">l</span><span class="p">.</span><span class="nx">rank</span> <span class="p">=</span> <span class="nx">rank</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h2 id="直接获取锁上面的排名">直接获取锁上面的排名</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">getLockRank</span><span class="p">(</span><span class="nx">l</span> <span class="o">*</span><span class="nx">mutex</span><span class="p">)</span> <span class="nx">lockRank</span> <span class="p">{</span>
+	<span class="k">return</span> <span class="nx">l</span><span class="p">.</span><span class="nx">rank</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h2 id="带排名加锁">带排名加锁</h2>
+<p>就是检查这个排名的锁能不能合法的lock，如果可以就lock</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// 第二个参数就是我们锁排名
+</span><span class="c1"></span><span class="kd">func</span> <span class="nf">lockWithRank</span><span class="p">(</span><span class="nx">l</span> <span class="o">*</span><span class="nx">mutex</span><span class="p">,</span> <span class="nx">rank</span> <span class="nx">lockRank</span><span class="p">)</span> <span class="p">{</span>
+   <span class="k">if</span> <span class="nx">l</span> <span class="o">==</span> <span class="o">&amp;</span><span class="nx">debuglock</span> <span class="o">||</span> <span class="nx">l</span> <span class="o">==</span> <span class="o">&amp;</span><span class="nx">paniclk</span> <span class="p">{</span>
+      <span class="c1">// 这俩东西不要做排名
+</span><span class="c1"></span>      <span class="c1">// debuglock是调试输出我们当前m上面持有锁和排名信息的
+</span><span class="c1"></span>      <span class="c1">// paniclk同理也差不多，是异常错误后执行的
+</span><span class="c1"></span>      <span class="c1">// lock2和unlock2都是和mutex有关的，第四篇文章讲到
+</span><span class="c1"></span>      <span class="nf">lock2</span><span class="p">(</span><span class="nx">l</span><span class="p">)</span>
+      <span class="k">return</span>
+   <span class="p">}</span>
+   <span class="c1">// 如果rank == 0，我们的rank就是一个数值最大的锁，它只会判断前一个锁是不是lockRankLeafRank来决定能不能获取锁
+</span><span class="c1"></span>   <span class="k">if</span> <span class="nx">rank</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+      <span class="nx">rank</span> <span class="p">=</span> <span class="nx">lockRankLeafRank</span>
+   <span class="p">}</span>
+   <span class="c1">// 获取我们执行的g
+</span><span class="c1"></span>   <span class="nx">gp</span> <span class="o">:=</span> <span class="nf">getg</span><span class="p">()</span>
+   <span class="c1">// 切换系统栈，也就是g0的栈中执行下面
+</span><span class="c1"></span>   <span class="nf">systemstack</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+      <span class="c1">// i是我们gp上面持有的锁信息长度
+</span><span class="c1"></span>      <span class="nx">i</span> <span class="o">:=</span> <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeldLen</span>
+      <span class="c1">// 如果我们locksHeldLen显示的长度&gt;=10，那么就报错
+</span><span class="c1"></span>      <span class="c1">// m 持有最多 10 个锁，由锁排名代码维护。
+</span><span class="c1"></span>      <span class="k">if</span> <span class="nx">i</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeld</span><span class="p">)</span> <span class="p">{</span>
+         <span class="nf">throw</span><span class="p">(</span><span class="s">&#34;too many locks held concurrently for rank checking&#34;</span><span class="p">)</span>
+      <span class="p">}</span>
+      <span class="c1">// 把这个锁信息（排名和锁地址）记录到m上
+</span><span class="c1"></span>      <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeld</span><span class="p">[</span><span class="nx">i</span><span class="p">].</span><span class="nx">rank</span> <span class="p">=</span> <span class="nx">rank</span>
+      <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeld</span><span class="p">[</span><span class="nx">i</span><span class="p">].</span><span class="nx">lockAddr</span> <span class="p">=</span> <span class="nb">uintptr</span><span class="p">(</span><span class="nx">unsafe</span><span class="p">.</span><span class="nf">Pointer</span><span class="p">(</span><span class="nx">l</span><span class="p">))</span>
+      <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeldLen</span><span class="o">++</span>
+		
+      <span class="c1">// i==0的话，证明是第一个锁，直接放上去就好了，不用检查的
+</span><span class="c1"></span>      <span class="c1">// i &gt; 0的话，证明不是第一个锁，我们就要判断我们新锁能不能加入进来
+</span><span class="c1"></span>      <span class="k">if</span> <span class="nx">i</span> <span class="p">&gt;</span> <span class="mi">0</span> <span class="p">{</span>
+         <span class="nf">checkRanks</span><span class="p">(</span><span class="nx">gp</span><span class="p">,</span> <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeld</span><span class="p">[</span><span class="nx">i</span><span class="o">-</span><span class="mi">1</span><span class="p">].</span><span class="nx">rank</span><span class="p">,</span> <span class="nx">rank</span><span class="p">)</span>
+      <span class="p">}</span>
+      <span class="c1">// 如果能加入进来，我们就上锁了
+</span><span class="c1"></span>      <span class="nf">lock2</span><span class="p">(</span><span class="nx">l</span><span class="p">)</span>
+   <span class="p">})</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>相同的还有一个函数<code>func acquireLockRank(rank lockRank)</code>他只是判断排名是否合法，然后把排名信息挂载到m上去，不进行锁操作，因为它也没给传一个锁，内部逻辑其实是一样的</p>
+<h2 id="真正的锁排名检查机制">真正的锁排名检查机制</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">checkRanks</span><span class="p">(</span><span class="nx">gp</span> <span class="o">*</span><span class="nx">g</span><span class="p">,</span> <span class="nx">prevRank</span><span class="p">,</span> <span class="nx">rank</span> <span class="nx">lockRank</span><span class="p">)</span> <span class="p">{</span>
+   <span class="c1">// 一开始设置我们的rankOK为false
+</span><span class="c1"></span>   <span class="nx">rankOK</span> <span class="o">:=</span> <span class="kc">false</span>
+   <span class="c1">// prevRank是前一个锁的等级，rank是我们现在要来的锁等级
+</span><span class="c1"></span>   <span class="k">if</span> <span class="nx">rank</span> <span class="p">&lt;</span> <span class="nx">prevRank</span> <span class="p">{</span>
+      <span class="c1">// 我们新来的锁比前一个锁的等级低，我们不能上锁
+</span><span class="c1"></span>      <span class="nx">rankOK</span> <span class="p">=</span> <span class="kc">false</span>
+   <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="nx">rank</span> <span class="o">==</span> <span class="nx">lockRankLeafRank</span> <span class="p">{</span>
+      <span class="c1">// 我们新来的锁，是一个最大锁，我们就判断前一个不是最大锁就行了
+</span><span class="c1"></span>      <span class="nx">rankOK</span> <span class="p">=</span> <span class="nx">prevRank</span> <span class="p">&lt;</span> <span class="nx">lockRankLeafRank</span>
+   <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+      <span class="c1">// 来到这块证明我们的新来的锁比前一个锁等级要高，我们得查表看看他们能不能一起使用
+</span><span class="c1"></span>      <span class="c1">// lockPartialOrder是一个二维数组，我们在上面看到过
+</span><span class="c1"></span>      <span class="nx">list</span> <span class="o">:=</span> <span class="nx">lockPartialOrder</span><span class="p">[</span><span class="nx">rank</span><span class="p">]</span>
+      <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">entry</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">list</span> <span class="p">{</span>
+         <span class="c1">// 判断我们的前一个锁，有没有出现在自己的合法列表里面，如果出现了那么就是true
+</span><span class="c1"></span>         <span class="k">if</span> <span class="nx">entry</span> <span class="o">==</span> <span class="nx">prevRank</span> <span class="p">{</span>
+            <span class="nx">rankOK</span> <span class="p">=</span> <span class="kc">true</span>
+            <span class="k">break</span>
+         <span class="p">}</span>
+      <span class="p">}</span>
+   <span class="p">}</span>
+   <span class="c1">// 如果没出现，就打印调试信息，报错就好了
+</span><span class="c1"></span>   <span class="k">if</span> <span class="p">!</span><span class="nx">rankOK</span> <span class="p">{</span>
+      <span class="nf">printlock</span><span class="p">()</span>
+      <span class="nb">println</span><span class="p">(</span><span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">procid</span><span class="p">,</span> <span class="s">&#34; ======&#34;</span><span class="p">)</span>
+      <span class="nf">printHeldLocks</span><span class="p">(</span><span class="nx">gp</span><span class="p">)</span>
+      <span class="nf">throw</span><span class="p">(</span><span class="s">&#34;lock ordering problem&#34;</span><span class="p">)</span>
+   <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h2 id="释放锁以及排名信息">释放锁以及排名信息</h2>
+<p>如果我们开启<code>staticklockranking</code>功能后，我们的解锁需要把m上面挂在的锁信息也给删一下</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">unlockWithRank</span><span class="p">(</span><span class="nx">l</span> <span class="o">*</span><span class="nx">mutex</span><span class="p">)</span> <span class="p">{</span>
+   <span class="k">if</span> <span class="nx">l</span> <span class="o">==</span> <span class="o">&amp;</span><span class="nx">debuglock</span> <span class="o">||</span> <span class="nx">l</span> <span class="o">==</span> <span class="o">&amp;</span><span class="nx">paniclk</span> <span class="p">{</span>
+      <span class="c1">// 与lockWithRank同理
+</span><span class="c1"></span>      <span class="nf">unlock2</span><span class="p">(</span><span class="nx">l</span><span class="p">)</span>
+      <span class="k">return</span>
+   <span class="p">}</span>
+   <span class="c1">// 下面就是简单的摘掉一个锁的过程
+</span><span class="c1"></span>   <span class="nx">gp</span> <span class="o">:=</span> <span class="nf">getg</span><span class="p">()</span>
+   <span class="nf">systemstack</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+      <span class="nx">found</span> <span class="o">:=</span> <span class="kc">false</span>
+      <span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeldLen</span> <span class="o">-</span> <span class="mi">1</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span><span class="o">--</span> <span class="p">{</span>
+         <span class="k">if</span> <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeld</span><span class="p">[</span><span class="nx">i</span><span class="p">].</span><span class="nx">lockAddr</span> <span class="o">==</span> <span class="nb">uintptr</span><span class="p">(</span><span class="nx">unsafe</span><span class="p">.</span><span class="nf">Pointer</span><span class="p">(</span><span class="nx">l</span><span class="p">))</span> <span class="p">{</span>
+            <span class="c1">// 我们要的锁找到了
+</span><span class="c1"></span>            <span class="nx">found</span> <span class="p">=</span> <span class="kc">true</span>
+            <span class="nb">copy</span><span class="p">(</span><span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeld</span><span class="p">[</span><span class="nx">i</span><span class="p">:</span><span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeldLen</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeld</span><span class="p">[</span><span class="nx">i</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeldLen</span><span class="p">])</span>
+            <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeldLen</span><span class="o">--</span>
+            <span class="k">break</span>
+         <span class="p">}</span>
+      <span class="p">}</span>
+      <span class="c1">// 没找到的话，就调试，还有报错
+</span><span class="c1"></span>      <span class="k">if</span> <span class="p">!</span><span class="nx">found</span> <span class="p">{</span>
+         <span class="nb">println</span><span class="p">(</span><span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">procid</span><span class="p">,</span> <span class="s">&#34;:&#34;</span><span class="p">,</span> <span class="nx">l</span><span class="p">.</span><span class="nx">rank</span><span class="p">.</span><span class="nf">String</span><span class="p">(),</span> <span class="nx">l</span><span class="p">.</span><span class="nx">rank</span><span class="p">,</span> <span class="nx">l</span><span class="p">)</span>
+         <span class="nf">throw</span><span class="p">(</span><span class="s">&#34;unlock without matching lock acquire&#34;</span><span class="p">)</span>
+      <span class="p">}</span>
+      <span class="c1">// 解锁
+</span><span class="c1"></span>      <span class="nf">unlock2</span><span class="p">(</span><span class="nx">l</span><span class="p">)</span>
+   <span class="p">})</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>相同的还有一个函数<code>func releaseLockRank(rank lockRank)</code>他只是释放m上面绑定的一个排名信息，锁地址是0的一个玩意。与<code>acquireLockRank</code>对照</p>
+<h2 id="判断排名合不合法">判断排名合不合法</h2>
+<p>不做任何操作也不往m上挂载锁信息</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// lockWithRankMayAcquire 判断锁排名是否合法，不合法就报错
+</span><span class="c1"></span><span class="kd">func</span> <span class="nf">lockWithRankMayAcquire</span><span class="p">(</span><span class="nx">l</span> <span class="o">*</span><span class="nx">mutex</span><span class="p">,</span> <span class="nx">rank</span> <span class="nx">lockRank</span><span class="p">)</span> <span class="p">{</span>
+   <span class="c1">// 拿到g
+</span><span class="c1"></span>   <span class="nx">gp</span> <span class="o">:=</span> <span class="nf">getg</span><span class="p">()</span>
+   <span class="c1">// 判断有没有锁
+</span><span class="c1"></span>   <span class="k">if</span> <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeldLen</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+      <span class="c1">// 没有锁，不可能出现锁排序出错问题
+</span><span class="c1"></span>      <span class="k">return</span>
+   <span class="p">}</span>
+   <span class="c1">// 切换系统栈
+</span><span class="c1"></span>   <span class="nf">systemstack</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+      <span class="nx">i</span> <span class="o">:=</span> <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeldLen</span>
+      <span class="k">if</span> <span class="nx">i</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeld</span><span class="p">)</span> <span class="p">{</span>
+         <span class="nf">throw</span><span class="p">(</span><span class="s">&#34;too many locks held concurrently for rank checking&#34;</span><span class="p">)</span>
+      <span class="p">}</span>
+      <span class="c1">// 这边就是临时挂载上去，然后做了一个判断
+</span><span class="c1"></span>      <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeld</span><span class="p">[</span><span class="nx">i</span><span class="p">].</span><span class="nx">rank</span> <span class="p">=</span> <span class="nx">rank</span>
+      <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeld</span><span class="p">[</span><span class="nx">i</span><span class="p">].</span><span class="nx">lockAddr</span> <span class="p">=</span> <span class="nb">uintptr</span><span class="p">(</span><span class="nx">unsafe</span><span class="p">.</span><span class="nf">Pointer</span><span class="p">(</span><span class="nx">l</span><span class="p">))</span>
+      <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeldLen</span><span class="o">++</span>
+      <span class="nf">checkRanks</span><span class="p">(</span><span class="nx">gp</span><span class="p">,</span> <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeld</span><span class="p">[</span><span class="nx">i</span><span class="o">-</span><span class="mi">1</span><span class="p">].</span><span class="nx">rank</span><span class="p">,</span> <span class="nx">rank</span><span class="p">)</span>
+      <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeldLen</span><span class="o">--</span>
+   <span class="p">})</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h2 id="判断g是否持有锁l">判断g是否持有锁l</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="c1">// 判断m有没有持有锁l
+</span><span class="c1"></span><span class="kd">func</span> <span class="nf">checkLockHeld</span><span class="p">(</span><span class="nx">gp</span> <span class="o">*</span><span class="nx">g</span><span class="p">,</span> <span class="nx">l</span> <span class="o">*</span><span class="nx">mutex</span><span class="p">)</span> <span class="kt">bool</span> <span class="p">{</span>
+	<span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeldLen</span> <span class="o">-</span> <span class="mi">1</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span><span class="o">--</span> <span class="p">{</span>
+		<span class="k">if</span> <span class="nx">gp</span><span class="p">.</span><span class="nx">m</span><span class="p">.</span><span class="nx">locksHeld</span><span class="p">[</span><span class="nx">i</span><span class="p">].</span><span class="nx">lockAddr</span> <span class="o">==</span> <span class="nb">uintptr</span><span class="p">(</span><span class="nx">unsafe</span><span class="p">.</span><span class="nf">Pointer</span><span class="p">(</span><span class="nx">l</span><span class="p">))</span> <span class="p">{</span>
+			<span class="k">return</span> <span class="kc">true</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+	<span class="k">return</span> <span class="kc">false</span>
+<span class="p">}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p><code>func assertLockHeld(l *mutex)</code>省略了一个g参数，这个里面是获取当前执行的g的m</p>
+<p><code>func assertRankHeld(r lockRank)</code>这个和上面的逻辑差不多，你们下去自己看，就是判断m是否持有这个排名</p>
+</div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>更新于 2022-09-04</span>
+            </div></div>
+        <div class="post-info-line">
+            <div class="post-info-md"><span>
+                            <a class="link-to-markdown" href="/3.-runtime%E4%B9%8Blockrank%E9%94%81%E6%8E%92%E5%90%8D%E6%9C%BA%E5%88%B6/index.md" target="_blank">阅读原始文档</a>
+                        </span></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="分享到 Hacker News" data-sharer="hackernews" data-url="https://xsc.scccc.cn/3.-runtime%E4%B9%8Blockrank%E9%94%81%E6%8E%92%E5%90%8D%E6%9C%BA%E5%88%B6/" data-title="3. runtime之lockRank锁排名机制"><i class="fab fa-hacker-news fa-fw" aria-hidden="true"></i></a><a href="javascript:void(0);" title="分享到 Line" data-sharer="line" data-url="https://xsc.scccc.cn/3.-runtime%E4%B9%8Blockrank%E9%94%81%E6%8E%92%E5%90%8D%E6%9C%BA%E5%88%B6/" data-title="3. runtime之lockRank锁排名机制"><i data-svg-src="https://cdn.jsdelivr.net/npm/simple-icons@7.3.0/icons/line.svg" aria-hidden="true"></i></a><a href="javascript:void(0);" title="分享到 微博" data-sharer="weibo" data-url="https://xsc.scccc.cn/3.-runtime%E4%B9%8Blockrank%E9%94%81%E6%8E%92%E5%90%8D%E6%9C%BA%E5%88%B6/" data-title="3. runtime之lockRank锁排名机制"><i class="fab fa-weibo fa-fw" aria-hidden="true"></i></a><a href="javascript:void(0);" title="分享到 百度" data-sharer="baidu" data-url="https://xsc.scccc.cn/3.-runtime%E4%B9%8Blockrank%E9%94%81%E6%8E%92%E5%90%8D%E6%9C%BA%E5%88%B6/" data-title="3. runtime之lockRank锁排名机制"><i data-svg-src="https://cdn.jsdelivr.net/npm/simple-icons@7.3.0/icons/baidu.svg" aria-hidden="true"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw" aria-hidden="true"></i>&nbsp;<a href="/tags/runtime/">runtime</a>,&nbsp;<a href="/tags/go%E5%BA%95%E5%B1%82%E5%AE%9E%E7%8E%B0/">go底层实现</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">返回</a></span>&nbsp;|&nbsp;<span><a href="/">主页</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"><a href="/2.-runtime%E4%B9%8Bnotifylist%E6%9D%A1%E4%BB%B6%E5%94%A4%E9%86%92/" class="prev" rel="prev" title="2. runtime之notifyList条件唤醒"><i class="fas fa-angle-left fa-fw" aria-hidden="true"></i>2. runtime之notifyList条件唤醒</a>
+            <a href="/4.-runtime%E4%B9%8Bmutex%E7%BA%BF%E7%A8%8B%E9%94%81%E7%9A%84%E5%AE%9E%E7%8E%B0/" class="next" rel="next" title="4. runtime之mutex线程锁的实现">4. runtime之mutex线程锁的实现<i class="fas fa-angle-right fa-fw" aria-hidden="true"></i></a></div>
+</div>
+<div id="comments"><div id="utterances" class="comment"></div><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">utterances</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line" itemscope itemtype="http://schema.org/CreativeWork"><i class="far fa-copyright fa-fw" aria-hidden="true"></i><span itemprop="copyrightYear">2022 - 2024</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="https://xsc.scccc.cn" target="_blank">Xsc</a></span>&nbsp;|&nbsp;<span class="license"><a rel="license external nofollow noopener noreffer" href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank">CC BY-NC 4.0</a></span><span class="icp-splitter">&nbsp;|&nbsp;</span><br class="icp-br"/>
+                    <span class="icp"><a href="https://beian.miit.gov.cn">晋ICP备20005176号-1</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="回到顶部">
+                <i class="fas fa-arrow-up fa-fw" aria-hidden="true"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="查看评论">
+                <i class="fas fa-comment fa-fw" aria-hidden="true"></i>
+            </a>
+        </div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@2.5.0/css/lightgallery-bundle.min.css"><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/autocomplete.js@0.38.1/dist/autocomplete.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lunr@2.3.9/lunr.min.js"></script><script type="text/javascript" src="/lib/lunr/lunr.stemmer.support.min.js"></script><script type="text/javascript" src="/lib/lunr/lunr.zh.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lazysizes@5.3.2/lazysizes.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/dist/twemoji.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery@2.5.0/lightgallery.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery@2.5.0/plugins/thumbnail/lg-thumbnail.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery@2.5.0/plugins/zoom/lg-zoom.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sharer.js@0.5.1/sharer.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/typeit@8.6.0/dist/index.umd.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"复制到剪贴板","maxShownLines":50},"comment":{"utterances":{"darkTheme":"github-dark","issueTerm":"pathname","label":"actposts","lightTheme":"github-light","repo":"xue1213888/xue1213888"}},"data":{"id-1":"Xsc Study Notes","id-2":"Xsc Study Notes"},"lightgallery":true,"search":{"highlightTag":"em","lunrIndexURL":"/index.json","lunrLanguageCode":"zh","lunrSegmentitURL":"/lib/lunr/lunr.segmentit.js","maxResultLength":10,"noResultsFound":"没有找到结果","snippetLength":30,"type":"lunr"},"twemoji":true,"typeit":{"cursorChar":"|","cursorSpeed":1000,"data":{"id-1":["id-1"],"id-2":["id-2"]},"duration":-1,"speed":100}};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>
