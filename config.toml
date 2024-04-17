@@ -387,8 +387,8 @@ theme = "LoveIt"
     # 文章页面的分享信息设置
     [params.page.share]
       enable = true
-      Twitter = true
-      Facebook = true
+      Twitter = false
+      Facebook = false
       Linkedin = false
       Whatsapp = false
       Pinterest = false
@@ -404,7 +404,7 @@ theme = "LoveIt"
       Flipboard = false
       Weibo = true
       Blogger = false
-      Baidu = false
+      Baidu = true
       Odnoklassniki = false
       Evernote = false
       Skype = false
