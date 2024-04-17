@@ -45,13 +45,14 @@ jobs:
         uses: actions/configure-pages@v1
       - name: Build with Hugo
         run: |
+          cd hugo-blog
           hugo \
             --minify \
             --baseURL ${{ steps.pages.outputs.base_url }}
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          path: ./public
+          path: ../hugo-output
 
   # Deployment job
   deploy:
