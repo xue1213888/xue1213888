@@ -120,16 +120,7 @@ tsc --noEmit app.ts
   
   - ```bash
     tsc file1.ts file2.ts --outFile dist/app.js
-    
-    
-    
     ```
-
-    ```
-    
-    ```
-
-
 
 - 方法2 
   
@@ -180,13 +171,15 @@ $ ts-node
 
 # 2. any类型，unknown类型，never类型
 
-`2024年4月18日凌晨3点总结，未完成`
+`2024年4月18日中午1点总结`
 
-## 1. any类型
+## 1. any 类型
 
 ### 1.1 基本含义
 
-any类型表示没有任何限制。如果某个变量设置为 `any` 。 TypeScript 会关闭该变量的类型检查。
+`any` 是顶层类型，是包含了所有类型的父集。
+
+`any` 类型可以存入任何值。如果某个变量设置为 `any` 。 `TypeScript` 会关闭该变量的类型检查。
 
 ```typescript
 let x: any;
@@ -202,4 +195,148 @@ x.foo = 100;
 尽量避免使用 `any` 类型。
 
 ### 1.2 类型推断
+
+只要没明确写类型，`TypeScript` 又推断不了的类型，全部都是 `any` 。
+
+使用 `noImplicitAny` 选项，可以让编译器在推断为 `any` 类型时报错。
+
+- **注意：明确写 any 的将不受影响**
+
+- **注意：使用 `let` 和 `var` 声明变量但不赋值也不明确写变量类型，这种情况开启 `noImplicitAny` 也不会报错**
+
+### 1.3 污染问题
+
+`any` 类型可以合理的赋值给其他任意类型而不会触发编译检查。所以可能会污染已经明确类型的变量，导致部分错误只能等运行阶段才能得到发现。
+
+```typescript
+let x:any = 'hello';
+let y:number;
+
+y = x;
+
+y*123;
+
+y.toFixed()
+```
+
+## 2. unknown 类型
+
+也是顶层类型，可以存入任意类型的值。
+
+- 不能赋值给其他类型的变量(除了`any` 类型和 `unknown` 类型)，解决了 `any` 类型污染的问题。
+
+- 不能直接调用 `unknown` 类型变量的方法和属性。
+
+- 运算限制，只能进行比较运算 `==`、`===`、`!=`、`!==`、`||`、`&&`、`?`、`!`、`typeof`、`instanceof`这几种。
+
+`unknown` 使用类型缩小到明确的类型后才能使用该真实类型变量的方法和属性，以及对其进行运算操作。
+
+```typescript
+let a:unknown = 1;
+
+a += 1; // 报错
+
+if (typeof a === 'number') { // 不报错
+    let r = a + 10;
+}
+
+// -----------------------
+let s:unknown = 'hello';
+
+if (typeof s == 'string') { // 正确
+    s.length;
+}
+```
+
+## 3. never 类型
+
+类型为空，不包含任何值，即不可能存在的值。对其赋值会报错。
+
+`never` 类型主要是保证类型运算的完整性。
+
+当我们写联合类型，例如 `string|number` 在对其进行类型缩小时，如果不满足 `string` 和 `number` 类型，那么就是 `never` 类型。
+
+```typescript
+function fn(x:string|number) {
+  if (typeof x === 'string') {
+    // ...
+  } else if (typeof x === 'number') {
+    // ...
+  } else {
+    x; // never 类型
+  }
+}
+```
+
+`never` 可以赋值给任意其他类型。
+
+`any` 和 `unknown` 是顶层类型，包含了所有类型，`any` 可以赋值给任意类型，`unknown` 可以复制给 `unknown` 和 `any` 类型。
+
+`never` 是底层类型，被所有类型包含着。所以 `never` 类型可以赋值给任意类型。
+
+# 3. TypeScripe 的类型系统
+
+## 1. 基本类型
+
+### 1.1 概述
+
+### 1.2 boolean 类型
+
+### 1.3 string 类型
+
+### 1.4 number 类型
+
+### 1.5 bigint 类型
+
+### 1.6 symbol 类型
+
+### 1.7 object 类型
+
+### 1.8 undefined 类型、null 类型
+
+## 2. 包装对象类型
+
+### 2.1 包装对象的概念
+
+### 2.2 包装对象类型与字面量类型
+
+## 3. Object 类型与 object 类型
+
+### 3.1 Object 类型
+
+### 3.2 object 类型
+
+## 4. undefined 和 null 的特殊性
+
+## 5. 值类型
+
+## 6. 联合类型
+
+## 7. 交叉类型
+
+## 8. type 命令
+
+## 9. typeof 运算符
+
+## 10. 块级类型声明
+
+## 11. 类型的兼容
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
