@@ -285,19 +285,99 @@ function fn(x:string|number) {
 
 ### 1.1 概述
 
+`JavaScript` 分为8种类型：
+
+1. boolean
+
+2. string
+
+3. number
+
+4. object
+
+5. symbol
+
+6. bigint
+
+7. undefined
+
+8. null
+
+`TypeScript` 将上面八种视为基本类型。
+
 ### 1.2 boolean 类型
+
+```typescript
+const x: boolean = false;
+```
 
 ### 1.3 string 类型
 
+```typescript
+const x: string = 'hello world';
+```
+
 ### 1.4 number 类型
+
+```typescript
+const x: number = 123;
+```
 
 ### 1.5 bigint 类型
 
+```typescript
+const x: bigint = 123n;
+```
+
 ### 1.6 symbol 类型
+
+```typescript
+const x: symbol = Symbol();
+```
 
 ### 1.7 object 类型
 
+对象、数组、函数都是 `obejct` 类型
+
+```typescript
+const x: object = {};
+const x: object = [];
+const x: object = (n: number) => n + 1;
+```
+
 ### 1.8 undefined 类型、null 类型
+
+`undefined` 和 `null` 是两种独立类型，它们各自都只有一个值。
+
+```typescript
+let x: undefined = undefined;
+
+let x: null = null;
+```
+
+对未声明类型的变量赋值 `undefined` 和 `null` 且在关闭 `noImplicitAny` 和 `starictNullChecks` 时，编译器将推断为 `any` 。
+
+```typescript
+// 关闭 noImplicitAny 和 strictNullChecks
+
+let a = undefined;   // any
+const b = undefined; // any
+
+let c = null;        // any
+const d = null;      // any
+```
+
+如果希望避免这种情况，请开启 `starictNullChecks`
+
+```typescript
+// 打开编译设置 strictNullChecks
+
+let a = undefined;   // undefined
+const b = undefined; // undefined
+
+let c = null;        // null
+const d = null;      // null
+```
 
 ## 2. 包装对象类型
 
@@ -326,21 +406,5 @@ function fn(x:string|number) {
 ## 10. 块级类型声明
 
 ## 11. 类型的兼容
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
